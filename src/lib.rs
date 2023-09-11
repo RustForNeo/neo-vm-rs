@@ -1,26 +1,29 @@
+#![feature(associated_type_defaults)]
+#![feature(linked_list_remove)]
 
-mod Crypto;
-mod Exception;
-mod Script;
-mod Types;
+pub use num_bigint::BigInt;
+mod exception;
+mod script;
+mod types;
 
-pub use Crypto::*;
-pub use Exception::*;
-pub use Script::*;
-pub use Types::*;
+mod vm;
 
+pub use exception::*;
+pub use script::*;
+pub use types::*;
+pub use vm::*;
 
 pub fn add(left: usize, right: usize) -> usize {
-    left + right
+	left + right
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+	use super::*;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+	#[test]
+	fn it_works() {
+		let result = add(2, 2);
+		assert_eq!(result, 4);
+	}
 }
