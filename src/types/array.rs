@@ -11,13 +11,15 @@ use std::{
 	fmt::{Debug, Formatter},
 	hash::{Hash, Hasher},
 	ops::Index,
+	rc::Rc,
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default, PartialOrd, Ord)]
 pub struct Array<'a> {
 	pub(crate) stack_references: u32,
-	pub(crate) reference_counter: &'a ReferenceCounter,
-	pub(crate) object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
+	pub(crate) reference_counter: Rc<RefCell<ReferenceCounter<'a>>>,
+	pub(crate) object_references:
+		RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
 	pub(crate) dfn: isize,
 	pub(crate) low_link: usize,
 	pub(crate) on_stack: bool,
@@ -33,14 +35,17 @@ impl<'a> Index<usize> for Array {
 }
 
 impl Array {
-	pub fn new(items: Option<Vec<StackItem>>, reference_counter:Option<&ReferenceCounter>) -> Self {
+	pub fn new(
+		items: Option<Vec<StackItem>>,
+		reference_counter: Option<Rc<RefCell<ReferenceCounter>>>,
+	) -> Self {
 		let items = items.unwrap_or_default();
 		Self {
 			stack_references: 0,
-			reference_counter: match reference_counter{
-			Some(rc) => rc,
-			None => &Default::default(),
-		},
+			reference_counter: match reference_counter {
+				Some(rc) => rc,
+				None => &Default::default(),
+			},
 			object_references: RefCell::new(None),
 			dfn: 0,
 			low_link: 0,

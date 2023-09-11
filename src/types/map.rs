@@ -13,12 +13,13 @@ use std::{
 	},
 	fmt::{Debug, Formatter},
 	hash::{Hash, Hasher},
+	rc::Rc,
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default, PartialOrd, Ord)]
 pub struct Map<'a> {
 	stack_references: u32,
-	reference_counter: &'a ReferenceCounter,
+	reference_counter: Rc<RefCell<ReferenceCounter<'a>>>,
 	object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
 	dfn: isize,
 	low_link: usize,
@@ -29,10 +30,10 @@ pub struct Map<'a> {
 impl Map {
 	pub const MAX_KEY_SIZE: usize = 64;
 
-	pub fn new(reference_counter: Option<&ReferenceCounter>) -> Self {
+	pub fn new(reference_counter: Option<Rc<RefCell<ReferenceCounter>>>) -> Self {
 		Self {
 			stack_references: 0,
-			reference_counter: match reference_counter{
+			reference_counter: match reference_counter {
 				Some(rc) => rc,
 				None => &Default::default(),
 			},
@@ -68,12 +69,12 @@ impl Map {
 		self.dictionary.contains_key(key)
 	}
 
-	pub fn remove(&mut self, key: &PrimitiveType) -> Option<StackItem> {
+	pub fn remove(&mut self, key: PrimitiveType) -> Option<StackItem> {
 		if key.size() > Self::MAX_KEY_SIZE {
 			panic!("Max key size exceeded: {}", key.size());
 		}
 
-		self.dictionary.remove(key)
+		self.dictionary.remove(key.borrow())
 	}
 
 	// Other map methods...
@@ -93,7 +94,7 @@ impl Map {
 		self.dictionary.keys()
 	}
 
-	pub fn values(&self) -> Values<'_, PrimitiveType, StackItem> {
+	pub fn values(&self) -> Values<PrimitiveType, StackItem> {
 		self.dictionary.values()
 	}
 

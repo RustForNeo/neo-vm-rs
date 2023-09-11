@@ -6,8 +6,8 @@ use crate::{
 	stack_item::{StackItem, StackItemTrait},
 	stack_item_type::StackItemType,
 };
-use std::{collections::HashMap, convert::TryInto, num::TryFromIntError, vec::Vec};
 use num_bigint::BigInt;
+use std::{collections::HashMap, convert::TryInto, num::TryFromIntError, vec::Vec};
 
 pub trait PrimitiveTypeTrait: StackItemTrait + Clone {
 	fn memory(&self) -> &[u8];
@@ -58,14 +58,14 @@ impl PrimitiveType {
 		}
 	}
 
-	pub fn get_integer(&self)->BigInt{
-		match self{
-			StackItem::VMInteger(integer)=>integer.get_integer().unwrap(),
-			StackItem::VMBoolean(boolean)=>boolean.get_integer().unwrap(),
-			StackItem::VMByteString(byte_string)=>byte_string.get_integer().unwrap(),
-			StackItem::VMBuffer(buffer)=>buffer.get_integer().unwrap(),
-			StackItem::VMPointer(pointer)=>pointer.get_integer().unwrap(),
-			_=>panic!("Not implemented")
+	pub fn get_integer(&self) -> BigInt {
+		match self {
+			StackItem::VMInteger(integer) => integer.get_integer().unwrap(),
+			StackItem::VMBoolean(boolean) => boolean.get_integer().unwrap(),
+			StackItem::VMByteString(byte_string) => byte_string.get_integer().unwrap(),
+			StackItem::VMBuffer(buffer) => buffer.get_integer().unwrap(),
+			StackItem::VMPointer(pointer) => pointer.get_integer().unwrap(),
+			_ => panic!("Not implemented"),
 		}
 	}
 }

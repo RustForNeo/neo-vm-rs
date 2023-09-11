@@ -7,7 +7,7 @@ use crate::{
 	stack_item_type::StackItemType,
 };
 use std::{
-	cell::RefCell,
+	cell::{Ref, RefCell},
 	collections::{HashMap, VecDeque},
 	fmt::{Debug, Formatter},
 	hash::{Hash, Hasher},
@@ -16,7 +16,7 @@ use std::{
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub struct Struct<'a> {
-	reference_counter: &'a ReferenceCounter<'a>,
+	reference_counter: Rc<RefCell<ReferenceCounter<'a>>>,
 	stack_references: u32,
 	object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
 	dfn: isize,
@@ -27,11 +27,14 @@ pub struct Struct<'a> {
 
 impl Struct {
 	/// Create a structure with the specified fields
-	pub fn new(fields: Option<Vec<StackItem>>, reference_counter:Option<&ReferenceCounter>) -> Self {
+	pub fn new(
+		fields: Option<Vec<StackItem>>,
+		reference_counter: Option<Rc<RefCell<ReferenceCounter>>>,
+	) -> Self {
 		Self {
-			reference_counter: match reference_counter{
+			reference_counter: match reference_counter {
 				Some(rc) => rc,
-				None => &Default::default(),
+				None => Default::default(),
 			},
 			stack_references: 0,
 			object_references: RefCell::new(None),
@@ -82,7 +85,7 @@ impl Struct {
 	pub fn to_array(&self) -> Array {
 		Array {
 			stack_references: self.stack_references,
-			reference_counter: self.reference_counter,
+			reference_counter: self.reference_counter.clone(),
 			object_references: self.object_references.clone(),
 			dfn: self.dfn,
 			low_link: self.low_link,
@@ -265,7 +268,7 @@ impl From<Array> for Struct {
 impl From<&Array> for Struct {
 	fn from(array: &Array) -> Self {
 		Self {
-			reference_counter: array.reference_counter,
+			reference_counter: array.reference_counter.clone(),
 			stack_references: array.stack_references,
 			object_references: array.object_references.clone(),
 			dfn: array.dfn,

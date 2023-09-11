@@ -1,3 +1,5 @@
+mod script_builder;
+
 pub fn add(left: usize, right: usize) -> usize {
 	left + right
 }

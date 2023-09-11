@@ -1,7 +1,8 @@
 use crate::{
 	array::Array, boolean::Boolean, buffer::Buffer, byte_string::ByteString,
 	compound_type::CompoundType, integer::Integer, interop_interface::InteropInterface, map::Map,
-	null::Null, primitive_type::PrimitiveType, stack_item_type::StackItemType, Struct::Struct,
+	null::Null, pointer::Pointer, primitive_type::PrimitiveType, stack_item_type::StackItemType,
+	Struct::Struct,
 };
 use num_bigint::BigInt;
 use std::{
@@ -12,7 +13,6 @@ use std::{
 	num::TryFromIntError,
 	string::FromUtf8Error,
 };
-use crate::pointer::Pointer;
 
 pub trait StackItemTrait<'a>: Debug + Hash + Eq {
 	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
@@ -132,7 +132,7 @@ impl StackItem {
 			StackItem::VMMap(map) => Box::new(map),
 			StackItem::InteropInterface(interop_interface) => Box::new(interop_interface),
 			StackItem::VMNull(null) => Box::new(null),
-			_ => {}
+			_ => {},
 		}
 	}
 
@@ -147,7 +147,7 @@ impl StackItem {
 	pub fn equals(&self, other: &Self) -> bool {
 		match (self, other) {
 			(Self::VMNull(a), Self::VMNull(b)) => true,
-			(Self::VMBoolean(a), Self::VMBoolean(b)) => a==b,
+			(Self::VMBoolean(a), Self::VMBoolean(b)) => a == b,
 			(Self::VMInteger(a), Self::VMInteger(b)) => a == b,
 			(Self::VMPointer(a), Self::VMPointer(b)) => a == b,
 			(Self::VMBuffer(a), Self::VMBuffer(b)) => a == b,
@@ -158,51 +158,65 @@ impl StackItem {
 		}
 	}
 
-	pub fn get_integer(&self)->BigInt{
-		match self{
-			StackItem::VMInteger(integer)=>integer.get_integer().unwrap(),
-			StackItem::VMBoolean(boolean)=>boolean.get_integer().unwrap(),
-			StackItem::VMBuffer(buffer)=>buffer.get_integer().unwrap(),
-			StackItem::VMPointer(pointer)=>pointer.get_integer().unwrap(),
-			StackItem::VMArray(array)=>array.get_integer().unwrap(),
-			StackItem::VMMap(map)=>map.get_integer().unwrap(),
-			StackItem::VMStruct(structured)=>structured.get_integer().unwrap(),
-			StackItem::InteropInterface(interop_interface)=>interop_interface.get_integer().unwrap(),
-			StackItem::VMNull(null)=>null.get_integer().unwrap(),
-			_=>panic!("Not implemented")
+	pub fn get_integer(&self) -> BigInt {
+		match self {
+			StackItem::VMInteger(integer) => integer.get_integer().unwrap(),
+			StackItem::VMBoolean(boolean) => boolean.get_integer().unwrap(),
+			StackItem::VMBuffer(buffer) => buffer.get_integer().unwrap(),
+			StackItem::VMPointer(pointer) => pointer.get_integer().unwrap(),
+			StackItem::VMArray(array) => array.get_integer().unwrap(),
+			StackItem::VMMap(map) => map.get_integer().unwrap(),
+			StackItem::VMStruct(structured) => structured.get_integer().unwrap(),
+			StackItem::InteropInterface(interop_interface) =>
+				interop_interface.get_integer().unwrap(),
+			StackItem::VMNull(null) => null.get_integer().unwrap(),
+			_ => panic!("Not implemented"),
 		}
 	}
 
-	pub fn get_bool(&self) ->bool{
-		match self{
-			StackItem::VMInteger(integer)=>integer.get_boolean(),
-			StackItem::VMBoolean(boolean)=>boolean.get_boolean(),
-			StackItem::VMBuffer(buffer)=>buffer.get_boolean(),
-			StackItem::VMPointer(pointer)=>pointer.get_boolean(),
-			StackItem::VMArray(array)=>array.get_boolean(),
-			StackItem::VMMap(map)=>map.get_boolean(),
-			StackItem::VMStruct(structured)=>structured.get_boolean(),
-			StackItem::InteropInterface(interop_interface)=>interop_interface.get_boolean(),
-			StackItem::VMNull(null)=>null.get_boolean(),
-			_=>panic!("Not implemented")
+	pub fn get_bool(&self) -> bool {
+		match self {
+			StackItem::VMInteger(integer) => integer.get_boolean(),
+			StackItem::VMBoolean(boolean) => boolean.get_boolean(),
+			StackItem::VMBuffer(buffer) => buffer.get_boolean(),
+			StackItem::VMPointer(pointer) => pointer.get_boolean(),
+			StackItem::VMArray(array) => array.get_boolean(),
+			StackItem::VMMap(map) => map.get_boolean(),
+			StackItem::VMStruct(structured) => structured.get_boolean(),
+			StackItem::InteropInterface(interop_interface) => interop_interface.get_boolean(),
+			StackItem::VMNull(null) => null.get_boolean(),
+			_ => panic!("Not implemented"),
 		}
 	}
 
-	pub fn get_item_type(&self)->StackItemType{
-		match self{
-			StackItem::VMInteger(integer)=>integer.get_type(),
-			StackItem::VMBoolean(boolean)=>boolean.get_type(),
-			StackItem::VMBuffer(buffer)=>buffer.get_type(),
-			StackItem::VMPointer(pointer)=>pointer.get_type(),
-			StackItem::VMArray(array)=>array.get_type(),
-			StackItem::VMMap(map)=>map.get_type(),
-			StackItem::VMStruct(structured)=>structured.get_type(),
-			StackItem::InteropInterface(interop_interface)=>interop_interface.get_type(),
-			StackItem::VMNull(null)=>null.get_type(),
-			_=>panic!("Not implemented")
+	pub fn get_slice(&self) -> &[u8] {
+		match self {
+			StackItem::VMInteger(integer) => integer.get_slice(),
+			StackItem::VMBoolean(boolean) => boolean.get_slice(),
+			StackItem::VMBuffer(buffer) => buffer.get_slice(),
+			StackItem::VMPointer(pointer) => pointer.get_slice(),
+			StackItem::VMArray(array) => array.get_slice(),
+			StackItem::VMMap(map) => map.get_slice(),
+			StackItem::VMStruct(structured) => structured.get_slice(),
+			StackItem::InteropInterface(interop_interface) => interop_interface.get_slice(),
+			StackItem::VMNull(null) => null.get_slice(),
+			_ => panic!("Not implemented"),
 		}
 	}
-
+	pub fn get_item_type(&self) -> StackItemType {
+		match self {
+			StackItem::VMInteger(integer) => integer.get_type(),
+			StackItem::VMBoolean(boolean) => boolean.get_type(),
+			StackItem::VMBuffer(buffer) => buffer.get_type(),
+			StackItem::VMPointer(pointer) => pointer.get_type(),
+			StackItem::VMArray(array) => array.get_type(),
+			StackItem::VMMap(map) => map.get_type(),
+			StackItem::VMStruct(structured) => structured.get_type(),
+			StackItem::InteropInterface(interop_interface) => interop_interface.get_type(),
+			StackItem::VMNull(null) => null.get_type(),
+			_ => panic!("Not implemented"),
+		}
+	}
 }
 
 #[macro_export]
@@ -413,7 +427,7 @@ impl Into<StackItem> for bool {
 	}
 }
 
-impl  From<bool> for StackItem {
+impl From<bool> for StackItem {
 	fn from(boolean: bool) -> Self {
 		StackItem::VMBoolean(Boolean::new(boolean))
 	}

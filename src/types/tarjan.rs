@@ -13,11 +13,11 @@ pub struct Tarjan<'a> {
 }
 
 impl Tarjan {
-	pub fn new(stack_items: Vec<& StackItem>) -> Self {
+	pub fn new(stack_items: Vec<&StackItem>) -> Self {
 		Self { stack_items, stack: VecDeque::new(), components: Vec::new(), index: 0 }
 	}
 
-	pub fn invoke(&mut self) -> Vec<HashSet<& StackItem>> {
+	pub fn invoke(&mut self) -> Vec<HashSet<&StackItem>> {
 		for StackItem in &self.stack_items {
 			if StackItem.dfn < 0 {
 				self.strong_connect(StackItem);

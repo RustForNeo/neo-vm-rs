@@ -80,7 +80,7 @@ impl StackItemTrait for InteropInterface {
 		true
 	}
 
-	fn get_interface<T: Any>(&self, _ty: TypeId) -> Result<&T, InvalidCastError> {
+	fn get_interface<T: Any>(&self) -> Result<&T, InvalidCastError> {
 		self.object
 			.downcast_ref::<T>()
 			.ok_or(InvalidCastError(format!("Cannot cast to {}", std::any::type_name::<T>())))
