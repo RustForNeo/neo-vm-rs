@@ -18,9 +18,9 @@ use murmur3::murmur3_32;
 use num_bigint::BigInt;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct ByteString {
+pub struct ByteString<'a> {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
@@ -61,8 +61,8 @@ impl ByteString {
 	}
 }
 
-impl StackItemTrait for ByteString {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
+impl<'a> StackItemTrait for ByteString {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -131,6 +131,10 @@ impl StackItemTrait for ByteString {
 	fn get_type(&self) -> StackItemType {
 		StackItemType::ByteString
 	}
+
+	fn equals(&self, other: &Option<StackItem>) -> bool {
+		todo!()
+	}
 }
 
 impl PrimitiveTypeTrait for ByteString {
@@ -160,20 +164,20 @@ impl From<&str> for ByteString {
 
 impl Into<StackItem> for ByteString {
 	fn into(self) -> StackItem {
-		StackItem::ByteString(self)
+		StackItem::VMByteString(self)
 	}
 }
 
 impl Into<PrimitiveType> for ByteString {
 	fn into(self) -> PrimitiveType {
-		PrimitiveType::ByteString(self)
+		PrimitiveType::VMByteString(self)
 	}
 }
 
 impl From<PrimitiveType> for ByteString {
 	fn from(ty: PrimitiveType) -> Self {
 		match ty {
-			PrimitiveType::ByteString(b) => b,
+			PrimitiveType::VMByteString(b) => b,
 			_ => panic!(),
 		}
 	}

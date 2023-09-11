@@ -12,30 +12,11 @@ use std::{
 };
 
 /// Represents `null` in the vm.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub struct Null;
 
-impl Debug for Null {
-	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		todo!()
-	}
-}
-
-impl Hash for Null {
-	fn hash<H: Hasher>(&self, state: &mut H) {
-		todo!()
-	}
-}
-
-impl Eq for Null {}
-
-impl PartialEq<Self> for Null {
-	fn eq(&self, other: &Self) -> bool {
-		todo!()
-	}
-}
-
-impl StackItemTrait for Null {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
+impl<'a> StackItemTrait for Null {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -87,7 +68,7 @@ impl StackItemTrait for Null {
 
 	fn convert_to(&self, ty: StackItemType) -> Result<StackItem, Err()> {
 		if ty == StackItemType::Any {
-			Ok(StackItem::Null(Self))
+			Ok(StackItem::VMNull(Self))
 		} else {
 			Err(())
 		}
@@ -120,18 +101,22 @@ impl StackItemTrait for Null {
 	fn get_type(&self) -> StackItemType {
 		StackItemType::Any
 	}
+
+	fn equals(&self, other: &Option<StackItem>) -> bool {
+		todo!()
+	}
 }
 
 impl Into<StackItem> for Null {
 	fn into(self) -> StackItem {
-		StackItem::Null(self)
+		StackItem::VMNull(self)
 	}
 }
 
 impl From<StackItem> for Null {
 	fn from(item: StackItem) -> Self {
 		match item {
-			StackItem::Null(n) => n,
+			StackItem::VMNull(n) => n,
 			_ => panic!("Cannot convert {:?} to Null", item),
 		}
 	}

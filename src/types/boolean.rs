@@ -10,9 +10,9 @@ use num_bigint::BigInt;
 use num_traits::{One, Zero};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Boolean {
+pub struct Boolean<'a> {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
@@ -59,8 +59,8 @@ impl Boolean {
 	}
 }
 
-impl StackItemTrait for Boolean {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
+impl<'a> StackItemTrait for Boolean {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -125,6 +125,10 @@ impl StackItemTrait for Boolean {
 	fn get_type(&self) -> StackItemType {
 		StackItemType::Boolean
 	}
+
+	fn equals(&self, other: &Option<StackItem>) -> bool {
+		todo!()
+	}
 }
 
 impl PrimitiveTypeTrait for Boolean {
@@ -135,20 +139,20 @@ impl PrimitiveTypeTrait for Boolean {
 
 impl Into<StackItem> for Boolean {
 	fn into(self) -> StackItem {
-		StackItem::Boolean(self)
+		StackItem::VMBoolean(self)
 	}
 }
 
 impl Into<PrimitiveType> for Boolean {
 	fn into(self) -> PrimitiveType {
-		PrimitiveType::Boolean(self)
+		PrimitiveType::VMBoolean(self)
 	}
 }
 
 impl From<PrimitiveType> for Boolean {
 	fn from(ty: PrimitiveType) -> Self {
 		match ty {
-			PrimitiveType::Boolean(b) => b,
+			PrimitiveType::VMBoolean(b) => b,
 			_ => panic!("Invalid cast"),
 		}
 	}
@@ -157,7 +161,7 @@ impl From<PrimitiveType> for Boolean {
 impl From<StackItem> for Boolean {
 	fn from(item: StackItem) -> Self {
 		match item {
-			StackItem::Boolean(b) => b,
+			StackItem::VMBoolean(b) => b,
 			_ => panic!("Invalid cast"),
 		}
 	}

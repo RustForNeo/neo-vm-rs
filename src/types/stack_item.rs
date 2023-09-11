@@ -12,9 +12,10 @@ use std::{
 	num::TryFromIntError,
 	string::FromUtf8Error,
 };
+use crate::pointer::Pointer;
 
-pub trait StackItemTrait: Debug + Hash + Eq {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
+pub trait StackItemTrait<'a>: Debug + Hash + Eq {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
 
 	fn dfn(&self) -> isize;
 
@@ -90,46 +91,118 @@ pub trait StackItemTrait: Debug + Hash + Eq {
 	}
 
 	fn get_type(&self) -> StackItemType;
+	fn equals(&self, other: &Option<StackItem>) -> bool;
 }
 
-pub struct ObjectReferenceEntry {
-	item: StackItem,
+pub struct ObjectReferenceEntry<'a> {
+	item: StackItem<'a>,
 	references: i32,
 }
 
-impl ObjectReferenceEntry {
+impl<'a> ObjectReferenceEntry {
 	pub fn new(item: StackItem) -> Self {
 		Self { item, references: 0 }
 	}
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-pub enum StackItem {
-	Buffer(Buffer),
-	ByteString(ByteString),
-	Boolean(Boolean),
-	Integer(Integer),
-	Array(Array),
-	Struct(Struct),
-	Map(Map),
-	InteropInterface(InteropInterface),
-	Null(Null),
+pub enum StackItem<'a> {
+	VMBuffer(Buffer<'a>),
+	VMByteString(ByteString<'a>),
+	VMBoolean(Boolean<'a>),
+	VMInteger(Integer<'a>),
+	VMPointer(Pointer<'a>),
+	VMArray(Array<'a>),
+	VMStruct(Struct<'a>),
+	VMMap(Map<'a>),
+	InteropInterface(InteropInterface<'a>),
+	VMNull(Null),
 }
 
 impl StackItem {
 	pub fn get_stack_item(item: &StackItem) -> Box<dyn StackItemTrait<ObjectReferences = ()>> {
 		match item {
-			StackItem::Buffer(buffer) => Box::new(buffer),
-			StackItem::ByteString(byte_string) => Box::new(byte_string),
-			StackItem::Boolean(boolean) => Box::new(boolean),
-			StackItem::Integer(integer) => Box::new(integer),
-			StackItem::Array(array) => Box::new(array),
-			StackItem::Struct(structured) => Box::new(structured),
-			StackItem::Map(map) => Box::new(map),
+			StackItem::VMBuffer(buffer) => Box::new(buffer),
+			StackItem::VMByteString(byte_string) => Box::new(byte_string),
+			StackItem::VMBoolean(boolean) => Box::new(boolean),
+			StackItem::VMInteger(integer) => Box::new(integer),
+			StackItem::VMPointer(pointer) => Box::new(pointer),
+			StackItem::VMArray(array) => Box::new(array),
+			StackItem::VMStruct(structured) => Box::new(structured),
+			StackItem::VMMap(map) => Box::new(map),
 			StackItem::InteropInterface(interop_interface) => Box::new(interop_interface),
-			StackItem::Null(null) => Box::new(null),
+			StackItem::VMNull(null) => Box::new(null),
+			_ => {}
 		}
 	}
+
+	pub fn downcast<T: StackItemTrait>(self) -> Result<T, Self> {
+		if let Some(item) = self.as_any().downcast::<T>() {
+			Ok(item)
+		} else {
+			Err(self)
+		}
+	}
+
+	pub fn equals(&self, other: &Self) -> bool {
+		match (self, other) {
+			(Self::VMNull(a), Self::VMNull(b)) => true,
+			(Self::VMBoolean(a), Self::VMBoolean(b)) => a==b,
+			(Self::VMInteger(a), Self::VMInteger(b)) => a == b,
+			(Self::VMPointer(a), Self::VMPointer(b)) => a == b,
+			(Self::VMBuffer(a), Self::VMBuffer(b)) => a == b,
+			(Self::VMArray(a), Self::VMArray(b)) => a == b,
+			(Self::VMMap(a), Self::VMMap(b)) => a == b,
+			(Self::VMStruct(a), Self::VMStruct(b)) => a == b,
+			_ => false,
+		}
+	}
+
+	pub fn get_integer(&self)->BigInt{
+		match self{
+			StackItem::VMInteger(integer)=>integer.get_integer().unwrap(),
+			StackItem::VMBoolean(boolean)=>boolean.get_integer().unwrap(),
+			StackItem::VMBuffer(buffer)=>buffer.get_integer().unwrap(),
+			StackItem::VMPointer(pointer)=>pointer.get_integer().unwrap(),
+			StackItem::VMArray(array)=>array.get_integer().unwrap(),
+			StackItem::VMMap(map)=>map.get_integer().unwrap(),
+			StackItem::VMStruct(structured)=>structured.get_integer().unwrap(),
+			StackItem::InteropInterface(interop_interface)=>interop_interface.get_integer().unwrap(),
+			StackItem::VMNull(null)=>null.get_integer().unwrap(),
+			_=>panic!("Not implemented")
+		}
+	}
+
+	pub fn get_bool(&self) ->bool{
+		match self{
+			StackItem::VMInteger(integer)=>integer.get_boolean(),
+			StackItem::VMBoolean(boolean)=>boolean.get_boolean(),
+			StackItem::VMBuffer(buffer)=>buffer.get_boolean(),
+			StackItem::VMPointer(pointer)=>pointer.get_boolean(),
+			StackItem::VMArray(array)=>array.get_boolean(),
+			StackItem::VMMap(map)=>map.get_boolean(),
+			StackItem::VMStruct(structured)=>structured.get_boolean(),
+			StackItem::InteropInterface(interop_interface)=>interop_interface.get_boolean(),
+			StackItem::VMNull(null)=>null.get_boolean(),
+			_=>panic!("Not implemented")
+		}
+	}
+
+	pub fn get_item_type(&self)->StackItemType{
+		match self{
+			StackItem::VMInteger(integer)=>integer.get_type(),
+			StackItem::VMBoolean(boolean)=>boolean.get_type(),
+			StackItem::VMBuffer(buffer)=>buffer.get_type(),
+			StackItem::VMPointer(pointer)=>pointer.get_type(),
+			StackItem::VMArray(array)=>array.get_type(),
+			StackItem::VMMap(map)=>map.get_type(),
+			StackItem::VMStruct(structured)=>structured.get_type(),
+			StackItem::InteropInterface(interop_interface)=>interop_interface.get_type(),
+			StackItem::VMNull(null)=>null.get_type(),
+			_=>panic!("Not implemented")
+		}
+	}
+
 }
 
 #[macro_export]
@@ -140,6 +213,7 @@ macro_rules! get_stack_item_data {
 			StackItem::ByteString(byte_string) => byte_string,
 			StackItem::Boolean(boolean) => boolean,
 			StackItem::Integer(integer) => integer,
+			StackItem::Pointer(pointer) => pointer,
 			StackItem::Array(array) => array,
 			StackItem::Struct(structured) => structured,
 			StackItem::Map(map) => map,
@@ -151,43 +225,49 @@ macro_rules! get_stack_item_data {
 
 impl From<Buffer> for StackItem {
 	fn from(buffer: Buffer) -> Self {
-		Self::Buffer(buffer)
+		Self::VMBuffer(buffer)
 	}
 }
 
 impl From<ByteString> for StackItem {
 	fn from(byte_string: ByteString) -> Self {
-		Self::ByteString(byte_string)
+		Self::VMByteString(byte_string)
 	}
 }
 
 impl From<Boolean> for StackItem {
 	fn from(boolean: Boolean) -> Self {
-		Self::Boolean(boolean)
+		Self::VMBoolean(boolean)
 	}
 }
 
 impl From<Integer> for StackItem {
 	fn from(integer: Integer) -> Self {
-		Self::Integer(integer)
+		Self::VMInteger(integer)
+	}
+}
+
+impl From<Pointer> for StackItem {
+	fn from(pointer: Pointer) -> Self {
+		Self::VMPointer(pointer)
 	}
 }
 
 impl From<Array> for StackItem {
 	fn from(array: Array) -> Self {
-		Self::Array(array)
+		Self::VMArray(array)
 	}
 }
 
 impl From<Struct> for StackItem {
 	fn from(structured: Struct) -> Self {
-		Self::Struct(structured)
+		Self::VMStruct(structured)
 	}
 }
 
 impl From<Map> for StackItem {
 	fn from(map: Map) -> Self {
-		Self::Map(map)
+		Self::VMMap(map)
 	}
 }
 
@@ -199,7 +279,7 @@ impl From<InteropInterface> for StackItem {
 
 impl From<Null> for StackItem {
 	fn from(null: Null) -> Self {
-		Self::Null(null)
+		Self::VMNull(null)
 	}
 }
 
@@ -208,7 +288,7 @@ impl TryInto<Buffer> for StackItem {
 
 	fn try_into(self) -> Result<Buffer, Self::Error> {
 		match self {
-			StackItem::Buffer(buffer) => Ok(buffer),
+			StackItem::VMBuffer(buffer) => Ok(buffer),
 			_ => Err(TryFromIntError::from(TryFromIntError)),
 		}
 	}
@@ -219,7 +299,7 @@ impl TryInto<ByteString> for StackItem {
 
 	fn try_into(self) -> Result<ByteString, Self::Error> {
 		match self {
-			StackItem::ByteString(byte_string) => Ok(byte_string),
+			StackItem::VMByteString(byte_string) => Ok(byte_string),
 			_ => Err(TryFromIntError::from(TryFromIntError)),
 		}
 	}
@@ -230,7 +310,7 @@ impl TryInto<Boolean> for StackItem {
 
 	fn try_into(self) -> Result<Boolean, Self::Error> {
 		match self {
-			StackItem::Boolean(boolean) => Ok(boolean),
+			StackItem::VMBoolean(boolean) => Ok(boolean),
 			_ => Err(TryFromIntError::from(TryFromIntError)),
 		}
 	}
@@ -241,7 +321,18 @@ impl TryInto<Integer> for StackItem {
 
 	fn try_into(self) -> Result<Integer, Self::Error> {
 		match self {
-			StackItem::Integer(integer) => Ok(integer),
+			StackItem::VMInteger(integer) => Ok(integer),
+			_ => Err(TryFromIntError::from(TryFromIntError)),
+		}
+	}
+}
+
+impl TryInto<Pointer> for StackItem {
+	type Error = TryFromIntError;
+
+	fn try_into(self) -> Result<Pointer, Self::Error> {
+		match self {
+			StackItem::VMPointer(pointer) => Ok(pointer),
 			_ => Err(TryFromIntError::from(TryFromIntError)),
 		}
 	}
@@ -252,7 +343,7 @@ impl TryInto<Array> for StackItem {
 
 	fn try_into(self) -> Result<Array, Self::Error> {
 		match self {
-			StackItem::Array(array) => Ok(array),
+			StackItem::VMArray(array) => Ok(array),
 			_ => Err(TryFromIntError::from(TryFromIntError)),
 		}
 	}
@@ -263,7 +354,7 @@ impl TryInto<Struct> for StackItem {
 
 	fn try_into(self) -> Result<Struct, Self::Error> {
 		match self {
-			StackItem::Struct(structured) => Ok(structured),
+			StackItem::VMStruct(structured) => Ok(structured),
 			_ => Err(TryFromIntError::from(TryFromIntError)),
 		}
 	}
@@ -274,7 +365,7 @@ impl TryInto<Map> for StackItem {
 
 	fn try_into(self) -> Result<Map, Self::Error> {
 		match self {
-			StackItem::Map(map) => Ok(map),
+			StackItem::VMMap(map) => Ok(map),
 			_ => Err(TryFromIntError::from(TryFromIntError)),
 		}
 	}
@@ -296,7 +387,7 @@ impl TryInto<Null> for StackItem {
 
 	fn try_into(self) -> Result<Null, Self::Error> {
 		match self {
-			StackItem::Null(null) => Ok(null),
+			StackItem::VMNull(null) => Ok(null),
 			_ => Err(TryFromIntError::from(TryFromIntError)),
 		}
 	}
@@ -307,10 +398,10 @@ impl TryInto<PrimitiveType> for StackItem {
 
 	fn try_into(self) -> Result<PrimitiveType, Self::Error> {
 		match self {
-			StackItem::Buffer(buffer) => Ok(buffer.into()),
-			StackItem::ByteString(byte_string) => Ok(byte_string.into()),
-			StackItem::Boolean(boolean) => Ok(boolean.into()),
-			StackItem::Integer(integer) => Ok(integer.into()),
+			StackItem::VMBuffer(buffer) => Ok(buffer.into()),
+			StackItem::VMByteString(byte_string) => Ok(byte_string.into()),
+			StackItem::VMBoolean(boolean) => Ok(boolean.into()),
+			StackItem::VMInteger(integer) => Ok(integer.into()),
 			_ => Err(TryFromIntError::from(TryFromIntError)),
 		}
 	}
@@ -318,6 +409,36 @@ impl TryInto<PrimitiveType> for StackItem {
 
 impl Into<StackItem> for bool {
 	fn into(self) -> StackItem {
-		StackItem::Boolean(Boolean::new(self))
+		StackItem::VMBoolean(Boolean::new(self))
+	}
+}
+
+impl  From<bool> for StackItem {
+	fn from(boolean: bool) -> Self {
+		StackItem::VMBoolean(Boolean::new(boolean))
+	}
+}
+
+impl From<Vec<u8>> for StackItem {
+	fn from(bytes: Vec<u8>) -> Self {
+		StackItem::VMByteString(ByteString::new(bytes))
+	}
+}
+
+impl From<&[u8]> for StackItem {
+	fn from(bytes: &[u8]) -> Self {
+		StackItem::VMByteString(ByteString::new(bytes.to_vec()))
+	}
+}
+
+impl From<BigInt> for StackItem {
+	fn from(big_int: BigInt) -> Self {
+		StackItem::VMInteger(Integer::new(&big_int))
+	}
+}
+
+impl From<&BigInt> for StackItem {
+	fn from(big_int: &BigInt) -> Self {
+		StackItem::VMInteger(Integer::new(big_int))
 	}
 }

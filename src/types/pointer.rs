@@ -8,9 +8,9 @@ use crate::{
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Pointer {
+pub struct Pointer<'a> {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
@@ -32,8 +32,8 @@ impl Pointer {
 	}
 }
 
-impl StackItemTrait for Pointer {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
+impl<'a> StackItemTrait for Pointer {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -93,6 +93,10 @@ impl StackItemTrait for Pointer {
 
 	fn get_type(&self) -> StackItemType {
 		StackItemType::Pointer
+	}
+
+	fn equals(&self, other: &Option<StackItem>) -> bool {
+		todo!()
 	}
 }
 

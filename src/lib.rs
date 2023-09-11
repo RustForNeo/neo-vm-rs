@@ -1,5 +1,8 @@
 #![feature(associated_type_defaults)]
 #![feature(linked_list_remove)]
+#![feature(exclusive_range_pattern)]
+
+extern crate core;
 
 pub use num_bigint::BigInt;
 mod exception;

@@ -20,4 +20,18 @@ impl StackItemType {
 			_ => false,
 		}
 	}
+
+	pub fn is_primitive(tp:u8) ->bool{
+		match tp{
+			0x20 | 0x21 | 0x28 => true,
+			_ => false,
+		}
+	}
+
+	pub fn is_compound(tp:u8) ->bool{
+		match tp{
+			0x40 | 0x41 | 0x48 => true,
+			_ => false,
+		}
+	}
 }

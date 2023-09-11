@@ -2,16 +2,16 @@ use crate::{
 	boolean::Boolean,
 	compound_type::{CompoundType, CompoundTypeTrait},
 	primitive_type::{PrimitiveType, PrimitiveTypeTrait},
-	stack_item::{ObjectReferenceEntry, StackItem, StackItem::ByteString, StackItemTrait},
+	stack_item::{ObjectReferenceEntry, StackItem, StackItem::VMByteString, StackItemTrait},
 	stack_item_type::StackItemType,
 };
 use num_bigint::{BigInt, Sign};
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, os::unix::raw::ino_t, vec::Vec};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
-pub struct Buffer {
+pub struct Buffer<'a> {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
@@ -29,6 +29,16 @@ impl Buffer {
 			bytes: Cow::Owned(Vec::with_capacity(size)),
 		}
 	}
+
+	// pub fn new_with_init(size:usize, zero_initialize:bool/* = true*/) -> Self
+	// {
+	// let _buffer = ArrayPool<byte>.Shared.Rent(size);
+	// let InnerBuffer = new Memory<byte>(_buffer, 0, size);
+	// if (zero_initialize)
+	// {
+	// 	InnerBuffer.Span.Clear();
+	// }
+	// }
 
 	pub fn from_slice(data: &[u8]) -> Self {
 		Self {
@@ -56,8 +66,8 @@ impl Drop for Buffer {
 	}
 }
 
-impl StackItemTrait for Buffer {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
+impl<'a> StackItemTrait for Buffer {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -109,7 +119,7 @@ impl StackItemTrait for Buffer {
 		as_immutable: bool,
 	) -> StackItem {
 		if as_immutable {
-			ByteString::from(self.to_vec()).into()
+			VMByteString::from(self.to_vec()).into()
 		} else {
 			Buffer::from_slice(self.as_slice()).into()
 		}
@@ -125,6 +135,10 @@ impl StackItemTrait for Buffer {
 
 	fn get_type(&self) -> StackItemType {
 		StackItemType::Buffer
+	}
+
+	fn equals(&self, other: &Option<StackItem>) -> bool {
+		todo!()
 	}
 }
 
@@ -177,20 +191,20 @@ impl From<&[u8]> for Buffer {
 
 impl Into<StackItem> for Buffer {
 	fn into(self) -> StackItem {
-		StackItem::Buffer(self)
+		StackItem::VMBuffer(self)
 	}
 }
 
 impl Into<PrimitiveType> for Buffer {
 	fn into(self) -> PrimitiveType {
-		PrimitiveType::Buffer(self)
+		PrimitiveType::VMBuffer(self)
 	}
 }
 
 impl From<PrimitiveType> for Buffer {
 	fn from(ty: PrimitiveType) -> Self {
 		match ty {
-			PrimitiveType::Buffer(b) => b,
+			PrimitiveType::VMBuffer(b) => b,
 			_ => panic!("Invalid cast"),
 		}
 	}

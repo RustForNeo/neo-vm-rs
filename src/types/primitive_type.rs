@@ -7,6 +7,7 @@ use crate::{
 	stack_item_type::StackItemType,
 };
 use std::{collections::HashMap, convert::TryInto, num::TryFromIntError, vec::Vec};
+use num_bigint::BigInt;
 
 pub trait PrimitiveTypeTrait: StackItemTrait + Clone {
 	fn memory(&self) -> &[u8];
@@ -40,45 +41,56 @@ pub trait PrimitiveTypeTrait: StackItemTrait + Clone {
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-pub enum PrimitiveType {
-	Buffer(Buffer),
-	ByteString(ByteString),
-	Boolean(Boolean),
-	Integer(Integer),
+pub enum PrimitiveType<'a> {
+	VMBuffer(Buffer<'a>),
+	VMByteString(ByteString<'a>),
+	VMBoolean(Boolean<'a>),
+	VMInteger(Integer<'a>),
 }
 
 impl PrimitiveType {
 	pub fn get_stack_item(item: &PrimitiveType) -> Box<dyn StackItemTrait<ObjectReferences = ()>> {
 		match item {
-			PrimitiveType::Buffer(buffer) => Box::new(buffer),
-			PrimitiveType::ByteString(byte_string) => Box::new(byte_string),
-			PrimitiveType::Boolean(boolean) => Box::new(boolean),
-			PrimitiveType::Integer(integer) => Box::new(integer),
+			PrimitiveType::VMBuffer(buffer) => Box::new(buffer),
+			PrimitiveType::VMByteString(byte_string) => Box::new(byte_string),
+			PrimitiveType::VMBoolean(boolean) => Box::new(boolean),
+			PrimitiveType::VMInteger(integer) => Box::new(integer),
+		}
+	}
+
+	pub fn get_integer(&self)->BigInt{
+		match self{
+			StackItem::VMInteger(integer)=>integer.get_integer().unwrap(),
+			StackItem::VMBoolean(boolean)=>boolean.get_integer().unwrap(),
+			StackItem::VMByteString(byte_string)=>byte_string.get_integer().unwrap(),
+			StackItem::VMBuffer(buffer)=>buffer.get_integer().unwrap(),
+			StackItem::VMPointer(pointer)=>pointer.get_integer().unwrap(),
+			_=>panic!("Not implemented")
 		}
 	}
 }
 
 impl From<Buffer> for PrimitiveType {
 	fn from(buffer: Buffer) -> Self {
-		Self::Buffer(buffer)
+		Self::VMBuffer(buffer)
 	}
 }
 
 impl From<ByteString> for PrimitiveType {
 	fn from(byte_string: ByteString) -> Self {
-		Self::ByteString(byte_string)
+		Self::VMByteString(byte_string)
 	}
 }
 
 impl From<Boolean> for PrimitiveType {
 	fn from(boolean: Boolean) -> Self {
-		Self::Boolean(boolean)
+		Self::VMBoolean(boolean)
 	}
 }
 
 impl From<Integer> for PrimitiveType {
 	fn from(integer: Integer) -> Self {
-		Self::Integer(integer)
+		Self::VMInteger(integer)
 	}
 }
 
@@ -87,7 +99,7 @@ impl TryInto<Buffer> for PrimitiveType {
 
 	fn try_into(self) -> Result<Buffer, Self::Error> {
 		match self {
-			StackItem::Buffer(buffer) => Ok(buffer),
+			StackItem::VMBuffer(buffer) => Ok(buffer),
 			_ => Err(TryFromIntError::from(TryFromIntError)),
 		}
 	}
@@ -98,7 +110,7 @@ impl TryInto<ByteString> for PrimitiveType {
 
 	fn try_into(self) -> Result<ByteString, Self::Error> {
 		match self {
-			StackItem::ByteString(byte_string) => Ok(byte_string),
+			StackItem::VMByteString(byte_string) => Ok(byte_string),
 			_ => Err(TryFromIntError::from(TryFromIntError)),
 		}
 	}
@@ -109,7 +121,7 @@ impl TryInto<Boolean> for PrimitiveType {
 
 	fn try_into(self) -> Result<Boolean, Self::Error> {
 		match self {
-			StackItem::Boolean(boolean) => Ok(boolean),
+			StackItem::VMBoolean(boolean) => Ok(boolean),
 			_ => Err(TryFromIntError::from(TryFromIntError)),
 		}
 	}
@@ -120,7 +132,7 @@ impl TryInto<Integer> for PrimitiveType {
 
 	fn try_into(self) -> Result<Integer, Self::Error> {
 		match self {
-			StackItem::Integer(integer) => Ok(integer),
+			StackItem::VMInteger(integer) => Ok(integer),
 			_ => Err(TryFromIntError::from(TryFromIntError)),
 		}
 	}
@@ -129,10 +141,10 @@ impl TryInto<Integer> for PrimitiveType {
 impl From<StackItem> for PrimitiveType {
 	fn from(stack_item: StackItem) -> Self {
 		match stack_item {
-			StackItem::Buffer(buffer) => Self::Buffer(buffer),
-			StackItem::ByteString(byte_string) => Self::ByteString(byte_string),
-			StackItem::Boolean(boolean) => Self::Boolean(boolean),
-			StackItem::Integer(integer) => Self::Integer(integer),
+			StackItem::VMBuffer(buffer) => Self::VMBuffer(buffer),
+			StackItem::VMByteString(byte_string) => Self::VMByteString(byte_string),
+			StackItem::VMBoolean(boolean) => Self::VMBoolean(boolean),
+			StackItem::VMInteger(integer) => Self::VMInteger(integer),
 			_ => panic!(),
 		}
 	}
@@ -141,10 +153,10 @@ impl From<StackItem> for PrimitiveType {
 impl Into<StackItem> for PrimitiveType {
 	fn into(self) -> StackItem {
 		match self {
-			Self::Buffer(buffer) => buffer.into(),
-			Self::ByteString(byte_string) => byte_string.into(),
-			Self::Boolean(boolean) => boolean.into(),
-			Self::Integer(integer) => integer.into(),
+			Self::VMBuffer(buffer) => buffer.into(),
+			Self::VMByteString(byte_string) => byte_string.into(),
+			Self::VMBoolean(boolean) => boolean.into(),
+			Self::VMInteger(integer) => integer.into(),
 		}
 	}
 }

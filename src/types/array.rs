@@ -14,17 +14,18 @@ use std::{
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default, PartialOrd, Ord)]
-pub struct Array {
+pub struct Array<'a> {
 	pub(crate) stack_references: u32,
-	pub(crate) object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	pub(crate) reference_counter: &'a ReferenceCounter,
+	pub(crate) object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
 	pub(crate) dfn: isize,
 	pub(crate) low_link: usize,
 	pub(crate) on_stack: bool,
-	pub(crate) array: Vec<StackItem>,
+	pub(crate) array: Vec<StackItem<'a>>,
 }
 
-impl Index<usize> for Array {
-	type Output = StackItem;
+impl<'a> Index<usize> for Array {
+	type Output = StackItem<'a>;
 
 	fn index(&self, index: usize) -> &Self::Output {
 		&self.array[index]
@@ -32,10 +33,14 @@ impl Index<usize> for Array {
 }
 
 impl Array {
-	pub fn new(items: Option<Vec<StackItem>>) -> Self {
+	pub fn new(items: Option<Vec<StackItem>>, reference_counter:Option<&ReferenceCounter>) -> Self {
 		let items = items.unwrap_or_default();
 		Self {
 			stack_references: 0,
+			reference_counter: match reference_counter{
+			Some(rc) => rc,
+			None => &Default::default(),
+		},
 			object_references: RefCell::new(None),
 			dfn: 0,
 			low_link: 0,
@@ -65,7 +70,7 @@ impl Array {
 			return item.clone()
 		}
 
-		let mut result = Array::new(None);
+		let mut result = Array::new(None, None);
 		map.insert(self.into(), result.clone().into());
 
 		for item in &self.array {
@@ -88,8 +93,8 @@ impl Array {
 	}
 }
 
-impl StackItemTrait for Array {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
+impl<'a> StackItemTrait for Array {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -154,6 +159,10 @@ impl StackItemTrait for Array {
 	fn get_type(&self) -> StackItemType {
 		StackItemType::Array
 	}
+
+	fn equals(&self, other: &Option<StackItem>) -> bool {
+		todo!()
+	}
 }
 
 impl CompoundTypeTrait for Array {
@@ -188,6 +197,6 @@ impl CompoundTypeTrait for Array {
 
 impl Into<StackItem> for Array {
 	fn into(self) -> StackItem {
-		StackItem::Array(self)
+		StackItem::VMArray(self)
 	}
 }

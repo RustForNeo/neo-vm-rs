@@ -19,16 +19,16 @@ where
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct ReferenceCounter {
-	tracked_items: HashSet<StackItem>,
-	zero_referred: HashSet<StackItem>,
-	cached_components: Option<LinkedList<HashSet<StackItem>>>,
+pub struct ReferenceCounter<'a> {
+	tracked_items: HashSet<StackItem<'a>>,
+	zero_referred: HashSet<StackItem<'a>>,
+	cached_components: Option<LinkedList<HashSet<StackItem<'a>>>>,
 	references_count: usize,
-	phantom: PhantomData<StackItem>,
+	phantom: PhantomData<StackItem<'a>>,
 }
 
 impl ReferenceCounter {
-	fn new() -> Self {
+	pub fn new() -> Self {
 		Self {
 			tracked_items: HashSet::new(),
 			zero_referred: HashSet::new(),
@@ -70,7 +70,7 @@ impl ReferenceCounter {
 		}
 	}
 
-	fn add_stack_reference(&mut self, item: &StackItem, count: usize /* = 1*/) {
+	pub(crate) fn add_stack_reference(&mut self, item: &StackItem, count: usize /* = 1*/) {
 		self.references_count += count;
 
 		if !self.need_track(item) {
@@ -193,7 +193,7 @@ impl ReferenceCounter {
 		}
 	}
 
-	fn remove_stack_reference(&mut self, item: &StackItem) {
+	pub(crate) fn remove_stack_reference(&mut self, item: &StackItem) {
 		self.references_count -= 1;
 
 		if !self.need_track(item) {

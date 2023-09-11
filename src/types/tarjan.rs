@@ -5,19 +5,19 @@ use std::{
 	iter::FromIterator,
 };
 
-pub struct Tarjan {
-	stack_items: Vec<StackItem>,
-	stack: VecDeque<StackItem>,
-	components: Vec<HashSet<StackItem>>,
+pub struct Tarjan<'a> {
+	stack_items: Vec<&'a StackItem<'a>>,
+	stack: VecDeque<&'a StackItem<'a>>,
+	components: Vec<HashSet<&'a StackItem<'a>>>,
 	index: usize,
 }
 
 impl Tarjan {
-	pub fn new(stack_items: Vec<StackItem>) -> Self {
+	pub fn new(stack_items: Vec<& StackItem>) -> Self {
 		Self { stack_items, stack: VecDeque::new(), components: Vec::new(), index: 0 }
 	}
 
-	pub fn invoke(&mut self) -> Vec<HashSet<StackItem>> {
+	pub fn invoke(&mut self) -> Vec<HashSet<& StackItem>> {
 		for StackItem in &self.stack_items {
 			if StackItem.dfn < 0 {
 				self.strong_connect(StackItem);

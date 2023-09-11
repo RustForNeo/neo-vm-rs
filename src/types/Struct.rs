@@ -15,19 +15,24 @@ use std::{
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
-pub struct Struct {
+pub struct Struct<'a> {
+	reference_counter: &'a ReferenceCounter<'a>,
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
-	array: Vec<StackItem>,
+	array: Vec<StackItem<'a>>,
 }
 
 impl Struct {
 	/// Create a structure with the specified fields
-	pub fn new(fields: Option<Vec<StackItem>>) -> Self {
+	pub fn new(fields: Option<Vec<StackItem>>, reference_counter:Option<&ReferenceCounter>) -> Self {
 		Self {
+			reference_counter: match reference_counter{
+				Some(rc) => rc,
+				None => &Default::default(),
+			},
 			stack_references: 0,
 			object_references: RefCell::new(None),
 			dfn: 0,
@@ -40,7 +45,7 @@ impl Struct {
 	/// Create a new structure with the same content as this structure.
 	/// All nested structures will be copied by value.
 	pub fn clone(&self, limits: &ExecutionEngineLimits) -> Self {
-		let mut result = Struct::new(None);
+		let mut result = Struct::new(None, None);
 		let mut queue = VecDeque::new();
 		queue.push_back(&result);
 		queue.push_back(self);
@@ -57,8 +62,8 @@ impl Struct {
 				limits.stack_size -= 1;
 
 				match item {
-					StackItem::Struct(s) => {
-						let mut sa = Struct::new(None);
+					StackItem::VMStruct(s) => {
+						let mut sa = Struct::new(None, None);
 						a.fields.push(&sa);
 						queue.push_back(&sa);
 						queue.push_back(&s);
@@ -77,6 +82,7 @@ impl Struct {
 	pub fn to_array(&self) -> Array {
 		Array {
 			stack_references: self.stack_references,
+			reference_counter: self.reference_counter,
 			object_references: self.object_references.clone(),
 			dfn: self.dfn,
 			low_link: self.low_link,
@@ -103,11 +109,11 @@ impl Struct {
 			let b = stack2.pop_front().unwrap();
 
 			match (a, b) {
-				(StackItem::ByteString(a), StackItem::ByteString(b)) =>
+				(StackItem::VMByteString(a), StackItem::VMByteString(b)) =>
 					if a != b {
 						return false
 					},
-				(StackItem::Struct(sa), StackItem::Struct(sb)) => {
+				(StackItem::VMStruct(sa), StackItem::VMStruct(sb)) => {
 					if Rc::ptr_eq(&sa, &sb) {
 						continue
 					}
@@ -140,8 +146,8 @@ impl Struct {
 	}
 }
 
-impl StackItemTrait for Struct {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
+impl<'a> StackItemTrait for Struct {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -206,6 +212,10 @@ impl StackItemTrait for Struct {
 	fn get_type(&self) -> StackItemType {
 		StackItemType::Struct
 	}
+
+	fn equals(&self, other: &Option<StackItem>) -> bool {
+		todo!()
+	}
 }
 
 impl CompoundTypeTrait for Struct {
@@ -241,6 +251,7 @@ impl CompoundTypeTrait for Struct {
 impl From<Array> for Struct {
 	fn from(array: Array) -> Self {
 		Self {
+			reference_counter: array.reference_counter,
 			stack_references: array.stack_references,
 			object_references: array.object_references,
 			dfn: array.dfn,
@@ -254,6 +265,7 @@ impl From<Array> for Struct {
 impl From<&Array> for Struct {
 	fn from(array: &Array) -> Self {
 		Self {
+			reference_counter: array.reference_counter,
 			stack_references: array.stack_references,
 			object_references: array.object_references.clone(),
 			dfn: array.dfn,

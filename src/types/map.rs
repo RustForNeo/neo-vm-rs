@@ -16,21 +16,26 @@ use std::{
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default, PartialOrd, Ord)]
-pub struct Map {
+pub struct Map<'a> {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	reference_counter: &'a ReferenceCounter,
+	object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
-	dictionary: HashMap<PrimitiveType, StackItem>,
+	dictionary: HashMap<PrimitiveType<'a>, StackItem<'a>>,
 }
 
 impl Map {
 	pub const MAX_KEY_SIZE: usize = 64;
 
-	pub fn new() -> Self {
+	pub fn new(reference_counter: Option<&ReferenceCounter>) -> Self {
 		Self {
 			stack_references: 0,
+			reference_counter: match reference_counter{
+				Some(rc) => rc,
+				None => &Default::default(),
+			},
 			object_references: RefCell::new(None),
 			dfn: 0,
 			low_link: 0,
@@ -105,8 +110,8 @@ impl Map {
 	}
 }
 
-impl StackItemTrait for Map {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
+impl<'a> StackItemTrait for Map {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -171,6 +176,10 @@ impl StackItemTrait for Map {
 	fn get_type(&self) -> StackItemType {
 		StackItemType::Map
 	}
+
+	fn equals(&self, other: &Option<StackItem>) -> bool {
+		todo!()
+	}
 }
 
 impl CompoundTypeTrait for Map {
@@ -205,24 +214,24 @@ impl CompoundTypeTrait for Map {
 
 impl Into<StackItem> for Map {
 	fn into(self) -> StackItem {
-		StackItem::Map(self)
+		StackItem::VMMap(self)
 	}
 }
 
 impl From<Map> for StackItem {
 	fn from(map: Map) -> Self {
-		StackItem::Map(map)
+		StackItem::VMMap(map)
 	}
 }
 
 impl From<Map> for CompoundType {
 	fn from(map: Map) -> Self {
-		Self::Map(map)
+		Self::VMMap(map)
 	}
 }
 
 impl Into<CompoundType> for Map {
 	fn into(self) -> CompoundType {
-		CompoundType::Map(self)
+		CompoundType::VMMap(self)
 	}
 }

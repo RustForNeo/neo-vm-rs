@@ -36,18 +36,18 @@ pub trait CompoundTypeTrait: StackItemTrait {
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-pub enum CompoundType {
-	Array(Array),
-	Struct(Struct),
-	Map(Map),
+pub enum CompoundType<'a> {
+	VMArray(Array<'a>),
+	VMStruct(Struct<'a>),
+	VMMap(Map<'a>),
 }
 
 impl CompoundType {
 	pub fn get_stack_item(item: &CompoundType) -> Box<dyn StackItemTrait<ObjectReferences = ()>> {
 		match item {
-			CompoundType::Array(array) => Box::new(array),
-			CompoundType::Struct(structured) => Box::new(structured),
-			CompoundType::Map(map) => Box::new(map),
+			CompoundType::VMArray(array) => Box::new(array),
+			CompoundType::VMStruct(structured) => Box::new(structured),
+			CompoundType::VMMap(map) => Box::new(map),
 			// CompoundType::InteropInterface(interop_interface) => Box::new(interop_interface),
 			// CompoundType::Null(null) => Box::new(null),
 		}
@@ -55,13 +55,13 @@ impl CompoundType {
 }
 impl From<Array> for CompoundType {
 	fn from(array: Array) -> Self {
-		Self::Array(array)
+		Self::VMArray(array)
 	}
 }
 
 impl From<Map> for CompoundType {
 	fn from(map: Map) -> Self {
-		Self::Map(map)
+		Self::VMMap(map)
 	}
 }
 
@@ -76,7 +76,7 @@ impl TryInto<Array> for CompoundType {
 
 	fn try_into(self) -> Result<Array, Self::Error> {
 		match self {
-			StackItem::Array(array) => Ok(array),
+			StackItem::VMArray(array) => Ok(array),
 			_ => Err(TryFromIntError::from(TryFromIntError)),
 		}
 	}
@@ -87,7 +87,7 @@ impl TryInto<Struct> for CompoundType {
 
 	fn try_into(self) -> Result<Struct, Self::Error> {
 		match self {
-			StackItem::Struct(_struct) => Ok(_struct),
+			StackItem::VMStruct(_struct) => Ok(_struct),
 			_ => Err(TryFromIntError::from(TryFromIntError)),
 		}
 	}
@@ -98,7 +98,7 @@ impl TryInto<Map> for CompoundType {
 
 	fn try_into(self) -> Result<Map, Self::Error> {
 		match self {
-			StackItem::Map(_map) => Ok(_map),
+			StackItem::VMMap(_map) => Ok(_map),
 			_ => Err(TryFromIntError::from(TryFromIntError)),
 		}
 	}
@@ -107,9 +107,9 @@ impl TryInto<Map> for CompoundType {
 impl From<StackItem> for CompoundType {
 	fn from(stack_item: StackItem) -> Self {
 		match stack_item {
-			StackItem::Array(array) => Self::Array(array),
-			StackItem::Map(map) => Self::Map(map),
-			StackItem::Struct(_struct) => Self::Struct(_struct),
+			StackItem::VMArray(array) => Self::VMArray(array),
+			StackItem::VMMap(map) => Self::VMMap(map),
+			StackItem::VMStruct(_struct) => Self::VMStruct(_struct),
 			_ => panic!(),
 		}
 	}
@@ -118,9 +118,9 @@ impl From<StackItem> for CompoundType {
 impl Into<StackItem> for CompoundType {
 	fn into(self) -> StackItem {
 		match self {
-			Self::Array(array) => array.into(),
-			Self::Map(map) => map.into(),
-			Self::Struct(_struct) => _struct.into(),
+			Self::VMArray(array) => array.into(),
+			Self::VMMap(map) => map.into(),
+			Self::VMStruct(_struct) => _struct.into(),
 		}
 	}
 }

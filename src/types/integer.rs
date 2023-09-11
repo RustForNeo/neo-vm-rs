@@ -18,9 +18,9 @@ use std::{
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default, Copy)]
-pub struct Integer {
+pub struct Integer<'a> {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
@@ -30,7 +30,7 @@ pub struct Integer {
 impl Integer {
 	const MAX_SIZE: u32 = 32;
 
-	fn new(value: &BigInt) -> Self {
+	pub(crate) fn new(value: &BigInt) -> Self {
 		let size = value.to_bytes().len() as u32;
 		if size > Self::MAX_SIZE {
 			panic!("Max size exceeded: {}", size);
@@ -151,8 +151,8 @@ impl Rem for Integer {
 	}
 }
 
-impl StackItemTrait for Integer {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
+impl<'a> StackItemTrait for Integer {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -213,6 +213,10 @@ impl StackItemTrait for Integer {
 	fn get_type(&self) -> StackItemType {
 		StackItemType::Integer
 	}
+
+	fn equals(&self, other: &Option<StackItem>) -> bool {
+		todo!()
+	}
 }
 
 impl PrimitiveTypeTrait for Integer {
@@ -223,20 +227,20 @@ impl PrimitiveTypeTrait for Integer {
 
 impl Into<StackItem> for Integer {
 	fn into(self) -> StackItem {
-		StackItem::Integer(self)
+		StackItem::VMInteger(self)
 	}
 }
 
 impl Into<PrimitiveType> for Integer {
 	fn into(self) -> PrimitiveType {
-		PrimitiveType::Integer(self)
+		PrimitiveType::VMInteger(self)
 	}
 }
 
 impl From<PrimitiveType> for Integer {
 	fn from(value: PrimitiveType) -> Self {
 		match value {
-			PrimitiveType::Integer(i) => i,
+			PrimitiveType::VMInteger(i) => i,
 			_ => panic!("Invalid cast"),
 		}
 	}

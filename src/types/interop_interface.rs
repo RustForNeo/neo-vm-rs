@@ -12,9 +12,9 @@ use std::{
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default, Copy)]
-pub struct InteropInterface {
+pub struct InteropInterface<'a> {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
@@ -22,35 +22,7 @@ pub struct InteropInterface {
 }
 
 impl StackItemTrait for InteropInterface {
-	fn equals(&self, other: &Option<StackItem>) -> bool {
-		match other {
-			Some(o) => {
-				if self == o.as_ref() {
-					return true
-				}
-				if let Some(i) = o.downcast_ref::<InteropInterface>() {
-					self.object.eq(&i.object)
-				} else {
-					false
-				}
-			},
-			None => false,
-		}
-	}
-
-	fn get_boolean(&self) -> bool {
-		true
-	}
-
-	fn get_interface<T: Any>(&self, _ty: TypeId) -> Result<&T, InvalidCastError> {
-		self.object
-			.downcast_ref::<T>()
-			.ok_or(InvalidCastError(format!("Cannot cast to {}", std::any::type_name::<T>())))
-	}
-
-	fn get_type(&self) -> StackItemType {
-		StackItemType::InteropInterface
-	}
+	type ObjectReferences = ();
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -104,11 +76,39 @@ impl StackItemTrait for InteropInterface {
 		todo!()
 	}
 
+	fn get_boolean(&self) -> bool {
+		true
+	}
+
+	fn get_interface<T: Any>(&self, _ty: TypeId) -> Result<&T, InvalidCastError> {
+		self.object
+			.downcast_ref::<T>()
+			.ok_or(InvalidCastError(format!("Cannot cast to {}", std::any::type_name::<T>())))
+	}
+
 	fn get_slice(&self) -> &[u8] {
 		todo!()
 	}
 
-	type ObjectReferences = ();
+	fn get_type(&self) -> StackItemType {
+		StackItemType::InteropInterface
+	}
+
+	fn equals(&self, other: &Option<StackItem>) -> bool {
+		match other {
+			Some(o) => {
+				if self == o.as_ref() {
+					return true
+				}
+				if let Some(i) = o.downcast_ref::<InteropInterface>() {
+					self.object.eq(&i.object)
+				} else {
+					false
+				}
+			},
+			None => false,
+		}
+	}
 }
 
 pub struct InvalidCastError(pub String);
