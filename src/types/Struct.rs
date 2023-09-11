@@ -48,22 +48,21 @@ impl Struct {
 	/// Create a new structure with the same content as this structure.
 	/// All nested structures will be copied by value.
 	pub fn clone(&self, limits: &ExecutionEngineLimits) -> Self {
-		let mut result = Struct::new(None, None);
+		let mut result = Struct::new(None, Some(self.reference_counter.clone()));
 		let mut queue = VecDeque::new();
 		queue.push_back(&result);
 		queue.push_back(self);
 
+		let mut count = limits.max_stack_size-1;
 		while !queue.is_empty() {
-			if limits.stack_size == 0 {
-				panic!("Beyond clone limits!");
-			}
-
 			let a = queue.pop_front().unwrap();
 			let b = queue.pop_front().unwrap();
+			for item in &b.array {
+				count-=1;
 
-			for item in &b.fields {
-				limits.stack_size -= 1;
-
+				if count == 0 {
+					panic!("Beyond clone limits!");
+				}
 				match item {
 					StackItem::VMStruct(s) => {
 						let mut sa = Struct::new(None, None);

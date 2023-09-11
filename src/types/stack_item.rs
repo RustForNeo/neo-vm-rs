@@ -456,3 +456,4 @@ impl From<&BigInt> for StackItem {
 		StackItem::VMInteger(Integer::new(big_int))
 	}
 }
+
