@@ -47,8 +47,8 @@ pub enum PrimitiveType {
 }
 
 impl PrimitiveType {
-	pub fn get_stack_item(item: &PrimitiveType) -> Box<dyn StackItemTrait<ObjectReferences = ()>> {
-		match item {
+	pub fn get_stack_item(&self) -> Box<dyn StackItemTrait<ObjectReferences = ()>> {
+		match &self {
 			PrimitiveType::VMBuffer(buffer) => Box::new(buffer),
 			PrimitiveType::VMByteString(byte_string) => Box::new(byte_string),
 			PrimitiveType::VMBoolean(boolean) => Box::new(boolean),

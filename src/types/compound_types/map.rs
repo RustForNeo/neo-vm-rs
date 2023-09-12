@@ -8,19 +8,18 @@ use crate::{
 use std::{
 	cell::RefCell,
 	collections::{
-		hash_map::{Entry, Iter, IterMut, Keys, Values},
+		hash_map::{Entry, Iter, IterMut},
 		HashMap,
 	},
-	fmt::{Debug, Formatter},
-	hash::{Hash, Hasher},
-	ops::Deref,
+	fmt::Debug,
+	hash::Hash,
 	rc::Rc,
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default, PartialOrd, Ord)]
 pub struct Map {
 	stack_references: u32,
-	reference_counter: Rc<RefCell<ReferenceCounter>>,
+	reference_counter: Option<Rc<RefCell<ReferenceCounter>>>,
 	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
 	dfn: isize,
 	low_link: usize,
@@ -35,10 +34,7 @@ impl Map {
 	pub fn new(reference_counter: Option<Rc<RefCell<ReferenceCounter>>>) -> Self {
 		Self {
 			stack_references: 0,
-			reference_counter: match reference_counter {
-				Some(rc) => rc,
-				None => &Default::default(),
-			},
+			reference_counter,
 			object_references: RefCell::new(None),
 			dfn: 0,
 			low_link: 0,
@@ -210,14 +206,19 @@ impl CompoundTypeTrait for Map {
 	}
 
 	fn clear(&mut self) {
-		todo!()
-	}
-
-	fn deep_copy(
-		&self,
-		ref_map: &HashMap<Rc<RefCell<StackItem>>, Rc<RefCell<StackItem>>>,
-	) -> StackItem {
-		todo!()
+		if self.read_only {
+			panic!("Cannot clear read-only map")
+		}
+		if self.reference_counter.is_some() {
+			for (key, value) in self.dictionary.iter() {
+				self.reference_counter
+					.unwrap()
+					.get_mut()
+					.remove_stack_reference(key.clone().into());
+				self.reference_counter.unwrap().get_mut().remove_stack_reference(value.clone());
+			}
+		}
+		self.dictionary.clear();
 	}
 }
 
@@ -242,5 +243,19 @@ impl From<Map> for CompoundType {
 impl Into<CompoundType> for Map {
 	fn into(self) -> CompoundType {
 		CompoundType::VMMap(self)
+	}
+}
+
+impl Clone for Map {
+	fn clone(&self) -> Self {
+		let mut result = Self::new(self.reference_counter.clone());
+
+		self.ref_map.insert(self, result.clone());
+
+		for (key, value) in self.dictionary.iter() {
+			result.dictionary.insert(key.clone(), value.clone());
+		}
+
+		result
 	}
 }

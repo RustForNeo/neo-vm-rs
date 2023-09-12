@@ -10,12 +10,10 @@ use num_bigint::BigInt;
 use num_traits::{One, Zero};
 use std::{
 	cell::RefCell,
-	cmp::Ordering,
 	collections::HashMap,
 	convert::TryFrom,
-	fmt::{Debug, Formatter},
-	hash::{Hash, Hasher},
-	mem,
+	fmt::Debug,
+	hash::Hash,
 	ops::{Add, Div, Mul, Rem, Sub},
 };
 

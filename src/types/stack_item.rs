@@ -1,8 +1,13 @@
 use crate::{
-	array::Array, boolean::Boolean, buffer::Buffer, byte_string::ByteString,
-	compound_type::CompoundType, integer::Integer, interop_interface::InteropInterface, map::Map,
-	null::Null, pointer::Pointer, primitive_type::PrimitiveType, stack_item_type::StackItemType,
-	Struct::Struct,
+	buffer::Buffer,
+	compound_types::{array::Array, compound_type::CompoundType, map::Map, Struct::Struct},
+	interop_interface::InteropInterface,
+	null::Null,
+	pointer::Pointer,
+	primitive_types::{
+		boolean::Boolean, byte_string::ByteString, integer::Integer, primitive_type::PrimitiveType,
+	},
+	stack_item_type::StackItemType,
 };
 use num_bigint::BigInt;
 use std::{

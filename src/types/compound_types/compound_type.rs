@@ -4,7 +4,6 @@ use crate::{
 };
 use std::{
 	cell::{Ref, RefCell},
-	collections::HashMap,
 	hash::Hash,
 	num::TryFromIntError,
 };
@@ -19,11 +18,6 @@ pub trait CompoundTypeTrait: StackItemTrait {
 	}
 
 	fn clear(&mut self);
-
-	fn deep_copy(&self, ref_map: &HashMap<&StackItem, StackItem>) -> StackItem;
-	fn get_hash_code(&self) {
-		panic!("Not supported");
-	}
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]

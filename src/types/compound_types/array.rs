@@ -10,8 +10,8 @@ use crate::{
 use std::{
 	cell::{Ref, RefCell},
 	collections::HashMap,
-	fmt::{Debug, Formatter},
-	hash::{Hash, Hasher},
+	fmt::Debug,
+	hash::Hash,
 	ops::Index,
 	rc::Rc,
 };
@@ -19,7 +19,7 @@ use std::{
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default, PartialOrd, Ord)]
 pub struct Array {
 	pub stack_references: u32,
-	pub reference_counter: Rc<RefCell<ReferenceCounter>>,
+	pub reference_counter: Option<Rc<RefCell<ReferenceCounter>>>,
 	pub object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
 	pub dfn: isize,
 	pub low_link: usize,
@@ -44,10 +44,7 @@ impl Array {
 		let items = items.unwrap_or_default();
 		Self {
 			stack_references: 0,
-			reference_counter: match reference_counter {
-				Some(rc) => rc,
-				None => &Default::default(),
-			},
+			reference_counter,
 			object_references: RefCell::new(None),
 			dfn: 0,
 			low_link: 0,
@@ -152,7 +149,7 @@ impl StackItemTrait for Array {
 		if self.get_type() == StackItemType::Array && ty == StackItemType::Struct {
 			return StackItem::from(Struct::new(
 				Some(self.array.clone()),
-				Some(self.reference_counter.clone()),
+				self.reference_counter.clone(),
 			))
 		}
 
@@ -160,11 +157,11 @@ impl StackItemTrait for Array {
 	}
 
 	fn get_boolean(&self) -> bool {
-		todo!()
+		true
 	}
 
 	fn get_slice(&self) -> &[u8] {
-		todo!()
+		panic!("Cannot get slice of array")
 	}
 
 	fn get_type(&self) -> StackItemType {
@@ -198,11 +195,18 @@ impl CompoundTypeTrait for Array {
 	}
 
 	fn clear(&mut self) {
-		todo!()
-	}
-
-	fn deep_copy(&self, ref_map: &HashMap<&StackItem, StackItem>) -> StackItem {
-		todo!()
+		if self.read_only {
+			panic!("Cannot clear read-only array")
+		}
+		if self.reference_counter.is_some() {
+			for item in self.array.iter() {
+				self.reference_counter
+					.unwrap()
+					.borrow_mut()
+					.remove_stack_reference(item.clone());
+			}
+		}
+		self.array.clear();
 	}
 }
 
@@ -215,9 +219,9 @@ impl Into<StackItem> for Array {
 impl Clone for Array {
 	fn clone(&self) -> Self {
 		let result = if let StackItem::VMStruct(_) = self {
-			StackItem::VMStruct(Struct::new(None, Some(self.reference_counter.clone())))
+			StackItem::VMStruct(Struct::new(None, self.reference_counter.clone()))
 		} else {
-			StackItem::VMArray(Array::new(None, Some(self.reference_counter.clone())))
+			StackItem::VMArray(Array::new(None, self.reference_counter.clone()))
 		};
 
 		self.ref_map.insert(self, result.clone());

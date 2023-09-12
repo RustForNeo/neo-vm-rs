@@ -11,14 +11,14 @@ use crate::{
 use std::{
 	cell::{Ref, RefCell},
 	collections::{HashMap, VecDeque},
-	fmt::{Debug, Formatter},
-	hash::{Hash, Hasher},
+	fmt::Debug,
+	hash::Hash,
 	rc::Rc,
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub struct Struct {
-	reference_counter: Rc<RefCell<ReferenceCounter>>,
+	reference_counter: Option<Rc<RefCell<ReferenceCounter>>>,
 	stack_references: u32,
 	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
 	dfn: isize,
@@ -35,10 +35,7 @@ impl Struct {
 		reference_counter: Option<Rc<RefCell<ReferenceCounter>>>,
 	) -> Self {
 		Self {
-			reference_counter: match reference_counter {
-				Some(rc) => rc,
-				None => Default::default(),
-			},
+			reference_counter,
 			stack_references: 0,
 			object_references: RefCell::new(None),
 			dfn: 0,
@@ -52,7 +49,7 @@ impl Struct {
 	/// Create a new structure with the same content as this structure.
 	/// All nested structures will be copied by value.
 	pub fn clone(&self, limits: &ExecutionEngineLimits) -> Self {
-		let mut result = Struct::new(None, Some(self.reference_counter.clone()));
+		let mut result = Struct::new(None, self.reference_counter.clone());
 		let mut queue = VecDeque::new();
 		queue.push_back(&result);
 		queue.push_back(self);
@@ -243,11 +240,18 @@ impl CompoundTypeTrait for Struct {
 	}
 
 	fn clear(&mut self) {
-		todo!()
-	}
-
-	fn deep_copy(&self, ref_map: &HashMap<&StackItem, StackItem>) -> StackItem {
-		todo!()
+		if self.read_only {
+			panic!("Cannot clear read-only struct")
+		}
+		if self.reference_counter.is_some() {
+			for item in self.array.iter() {
+				self.reference_counter
+					.unwrap()
+					.borrow_mut()
+					.remove_stack_reference(item.clone());
+			}
+		}
+		self.array.clear();
 	}
 }
 
@@ -278,5 +282,17 @@ impl From<&Array> for Struct {
 			array: array.array.clone(),
 			read_only: array.read_only,
 		}
+	}
+}
+
+impl Clone for Struct {
+	fn clone(&self) -> Self {
+		let mut result = Self::new(None, self.reference_counter.clone());
+
+		for item in &self.array {
+			result.array.push(item.clone());
+		}
+
+		result
 	}
 }

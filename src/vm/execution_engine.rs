@@ -1421,13 +1421,6 @@ impl ExecutionEngine {
 	}
 
 	fn unload_context(&mut self, mut context: Rc<RefCell<ExecutionContext>>) {
-		if let Some(current) = &mut self.current_context {
-			if current.evaluation_stack != context.evaluation_stack {
-				context.evaluation_stack.clear();
-				current.evaluation_stack.append(&mut context.evaluation_stack);
-			}
-		}
-
 		if self.invocation_stack.is_empty() {
 			self.current_context = None;
 			self.entry_context = None;
@@ -1435,7 +1428,15 @@ impl ExecutionEngine {
 			self.current_context = Some(self.invocation_stack.last().unwrap().clone());
 		}
 
-		context.clear();
+		if let Some(current) = &mut self.current_context {
+			if current.borrow().shared_states.static_fields
+				!= context.borrow().shared_states.static_fields
+			{
+				context.borrow().shared_states.static_fields.unwrap().clear_references();
+			}
+		}
+		context.borrow().local_variables.unwrap().clear_references();
+		context.borrow().arguments.unwrap().clear_references();
 	}
 
 	fn create_context(

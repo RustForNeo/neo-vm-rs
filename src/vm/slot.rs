@@ -51,7 +51,7 @@ impl Slot {
 
 	pub fn clear_references(&mut self) {
 		for item in &self.items {
-			self.reference_counter.remove_stack_reference(item);
+			self.reference_counter.get_mut().remove_stack_reference(item.clone());
 		}
 	}
 }
