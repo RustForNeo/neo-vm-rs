@@ -1,10 +1,8 @@
 use crate::{
-	boolean::Boolean,
 	buffer::Buffer,
-	byte_string::ByteString,
-	integer::Integer,
 	stack_item::{StackItem, StackItemTrait},
 	stack_item_type::StackItemType,
+	types::primitive_types::{boolean::Boolean, byte_string::ByteString, integer::Integer},
 };
 use num_bigint::BigInt;
 use std::{collections::HashMap, convert::TryInto, num::TryFromIntError, vec::Vec};
@@ -41,11 +39,11 @@ pub trait PrimitiveTypeTrait: StackItemTrait + Clone {
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-pub enum PrimitiveType<'a> {
-	VMBuffer(Buffer<'a>),
-	VMByteString(ByteString<'a>),
-	VMBoolean(Boolean<'a>),
-	VMInteger(Integer<'a>),
+pub enum PrimitiveType {
+	VMBuffer(Buffer),
+	VMByteString(ByteString),
+	VMBoolean(Boolean),
+	VMInteger(Integer),
 }
 
 impl PrimitiveType {

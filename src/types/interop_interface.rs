@@ -12,9 +12,9 @@ use std::{
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default, Copy)]
-pub struct InteropInterface<'a> {
+pub struct InteropInterface {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
+	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
@@ -69,10 +69,6 @@ impl StackItemTrait for InteropInterface {
 	}
 
 	fn convert_to(&self, ty: StackItemType) -> StackItem {
-		todo!()
-	}
-
-	fn deep_copy(&self, ref_map: &HashMap<&StackItem, StackItem>, as_immutable: bool) -> StackItem {
 		todo!()
 	}
 

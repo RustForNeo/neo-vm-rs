@@ -1,17 +1,15 @@
 use crate::{
-	boolean::Boolean,
-	compound_type::{CompoundType, CompoundTypeTrait},
-	primitive_type::{PrimitiveType, PrimitiveTypeTrait},
 	stack_item::{ObjectReferenceEntry, StackItem, StackItem::VMByteString, StackItemTrait},
 	stack_item_type::StackItemType,
+	types::compound_types::compound_type::CompoundType,
 };
 use num_bigint::{BigInt, Sign};
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, os::unix::raw::ino_t, vec::Vec};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
-pub struct Buffer<'a> {
+pub struct Buffer {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
+	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
@@ -66,8 +64,8 @@ impl Drop for Buffer {
 	}
 }
 
-impl<'a> StackItemTrait for Buffer {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
+impl StackItemTrait for Buffer {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
 
 	fn dfn(&self) -> isize {
 		self.dfn

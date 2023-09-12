@@ -1,45 +1,36 @@
 use crate::{
-	array::Array,
-	map::Map,
-	reference_counter::ReferenceCounter,
+	compound_types::{array::Array, map::Map, Struct::Struct},
 	stack_item::{StackItem, StackItemTrait},
-	Struct::Struct,
 };
 use std::{
-	cell::RefCell,
+	cell::{Ref, RefCell},
 	collections::HashMap,
 	hash::Hash,
 	num::TryFromIntError,
-	rc::{Rc, Weak},
 };
 
 pub trait CompoundTypeTrait: StackItemTrait {
-	fn reference_counter(&self) -> Option<&ReferenceCounter>;
-
 	fn count(&self) -> usize;
-	fn sub_items(&self) -> Vec<&StackItem>;
+	fn sub_items(&self) -> Vec<Ref<RefCell<StackItem>>>;
 	fn sub_items_count(&self) -> usize;
-
-	fn is_read_only(&self) -> bool;
+	fn read_only(&self);
+	fn is_read_only(&self) -> bool {
+		false
+	}
 
 	fn clear(&mut self);
 
 	fn deep_copy(&self, ref_map: &HashMap<&StackItem, StackItem>) -> StackItem;
-
-	fn get_boolean(&self) -> bool {
-		true
-	}
-
 	fn get_hash_code(&self) {
 		panic!("Not supported");
 	}
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-pub enum CompoundType<'a> {
-	VMArray(Array<'a>),
-	VMStruct(Struct<'a>),
-	VMMap(Map<'a>),
+pub enum CompoundType {
+	VMArray(Array),
+	VMStruct(Struct),
+	VMMap(Map),
 }
 
 impl CompoundType {

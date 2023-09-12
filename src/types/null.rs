@@ -15,8 +15,8 @@ use std::{
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub struct Null;
 
-impl<'a> StackItemTrait for Null {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
+impl StackItemTrait for Null {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -72,10 +72,6 @@ impl<'a> StackItemTrait for Null {
 		} else {
 			Err(())
 		}
-	}
-
-	fn deep_copy(&self, ref_map: &HashMap<&StackItem, StackItem>, as_immutable: bool) -> StackItem {
-		todo!()
 	}
 
 	fn get_boolean(&self) -> bool {

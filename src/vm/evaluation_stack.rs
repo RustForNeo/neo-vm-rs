@@ -3,9 +3,9 @@ use std::{cell::RefCell, collections::VecDeque, convert::TryInto, rc::Rc};
 
 /// Represents the evaluation stack in the VM.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct EvaluationStack<'a> {
-	stack: VecDeque<StackItem<'a>>,
-	reference_counter: Rc<RefCell<ReferenceCounter<'a>>>,
+pub struct EvaluationStack {
+	stack: VecDeque<Rc<RefCell<StackItem>>>,
+	reference_counter: Rc<RefCell<ReferenceCounter>>,
 }
 
 impl EvaluationStack {
@@ -31,13 +31,13 @@ impl EvaluationStack {
 	}
 
 	/// Returns the item at the specified index from the top of the stack without removing it.
-	pub fn peek(&self, index: i64) -> Option<&StackItem> {
+	pub fn peek(&self, index: i64) -> Option<Rc<RefCell<StackItem>>> {
 		let index = index.try_into().ok()?;
-		self.stack.get(self.len().checked_sub(index + 1)?)
+		Some(self.stack.get(self.len().checked_sub(index + 1)?).unwrap().clone())
 	}
 
 	/// Pushes an item onto the top of the stack.
-	pub fn push(&mut self, item: StackItem) {
+	pub fn push(&mut self, item: Rc<RefCell<StackItem>>) {
 		self.stack.push_back(item);
 	}
 
@@ -52,7 +52,7 @@ impl EvaluationStack {
 	}
 
 	/// Removes and returns the item at the top of the stack.
-	pub fn pop(&mut self) -> Option<StackItem> {
+	pub fn pop(&mut self) -> Option<Rc<RefCell<StackItem>>> {
 		self.stack.pop_back()
 	}
 

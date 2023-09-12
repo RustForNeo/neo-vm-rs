@@ -1,12 +1,14 @@
 use crate::{
-	compound_type::{CompoundType, CompoundTypeTrait},
 	reference_counter::ReferenceCounter,
 	stack_item::{ObjectReferenceEntry, StackItem, StackItemTrait},
 	stack_item_type::StackItemType,
-	Struct::Struct,
+	types::compound_types::{
+		compound_type::{CompoundType, CompoundTypeTrait},
+		Struct::Struct,
+	},
 };
 use std::{
-	cell::RefCell,
+	cell::{Ref, RefCell},
 	collections::HashMap,
 	fmt::{Debug, Formatter},
 	hash::{Hash, Hasher},
@@ -15,19 +17,19 @@ use std::{
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default, PartialOrd, Ord)]
-pub struct Array<'a> {
-	pub(crate) stack_references: u32,
-	pub(crate) reference_counter: Rc<RefCell<ReferenceCounter<'a>>>,
-	pub(crate) object_references:
-		RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
-	pub(crate) dfn: isize,
-	pub(crate) low_link: usize,
-	pub(crate) on_stack: bool,
-	pub(crate) array: Vec<StackItem<'a>>,
+pub struct Array {
+	pub stack_references: u32,
+	pub reference_counter: Rc<RefCell<ReferenceCounter>>,
+	pub object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	pub dfn: isize,
+	pub low_link: usize,
+	pub on_stack: bool,
+	pub array: Vec<Rc<RefCell<StackItem>>>,
+	pub read_only: bool,
 }
 
-impl<'a> Index<usize> for Array {
-	type Output = StackItem<'a>;
+impl Index<usize> for Array {
+	type Output = Rc<RefCell<StackItem>>;
 
 	fn index(&self, index: usize) -> &Self::Output {
 		&self.array[index]
@@ -36,7 +38,7 @@ impl<'a> Index<usize> for Array {
 
 impl Array {
 	pub fn new(
-		items: Option<Vec<StackItem>>,
+		items: Option<Vec<Rc<RefCell<StackItem>>>>,
 		reference_counter: Option<Rc<RefCell<ReferenceCounter>>>,
 	) -> Self {
 		let items = items.unwrap_or_default();
@@ -51,10 +53,11 @@ impl Array {
 			low_link: 0,
 			on_stack: false,
 			array: items,
+			read_only: false,
 		}
 	}
 
-	pub fn add(&mut self, item: StackItem) {
+	pub fn add(&mut self, item: Rc<RefCell<StackItem>>) {
 		self.array.push(item);
 	}
 
@@ -85,7 +88,7 @@ impl Array {
 		result.into()
 	}
 
-	pub fn iter(&self) -> std::slice::Iter<StackItem> {
+	pub fn iter(&self) -> std::slice::Iter<Rc<RefCell<StackItem>>> {
 		self.array.iter()
 	}
 
@@ -98,8 +101,8 @@ impl Array {
 	}
 }
 
-impl<'a> StackItemTrait for Array {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
+impl StackItemTrait for Array {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -146,11 +149,14 @@ impl<'a> StackItemTrait for Array {
 	}
 
 	fn convert_to(&self, ty: StackItemType) -> StackItem {
-		todo!()
-	}
+		if self.get_type() == StackItemType::Array && ty == StackItemType::Struct {
+			return StackItem::from(Struct::new(
+				Some(self.array.clone()),
+				Some(self.reference_counter.clone()),
+			))
+		}
 
-	fn deep_copy(&self, ref_map: &HashMap<&StackItem, StackItem>, as_immutable: bool) -> StackItem {
-		todo!()
+		StackItemTrait::convert_to(&self, ty)
 	}
 
 	fn get_boolean(&self) -> bool {
@@ -171,15 +177,11 @@ impl<'a> StackItemTrait for Array {
 }
 
 impl CompoundTypeTrait for Array {
-	fn reference_counter(&self) -> Option<&ReferenceCounter> {
-		todo!()
-	}
-
 	fn count(&self) -> usize {
 		self.array.len()
 	}
 
-	fn sub_items(&self) -> Vec<&StackItem> {
+	fn sub_items(&self) -> Vec<Ref<RefCell<StackItem>>> {
 		self.array.iter().collect()
 	}
 
@@ -187,8 +189,12 @@ impl CompoundTypeTrait for Array {
 		self.array.len()
 	}
 
+	fn read_only(&mut self) {
+		self.read_only = true
+	}
+
 	fn is_read_only(&self) -> bool {
-		todo!()
+		self.read_only
 	}
 
 	fn clear(&mut self) {
@@ -203,5 +209,35 @@ impl CompoundTypeTrait for Array {
 impl Into<StackItem> for Array {
 	fn into(self) -> StackItem {
 		StackItem::VMArray(self)
+	}
+}
+
+impl Clone for Array {
+	fn clone(&self) -> Self {
+		let result = if let StackItem::VMStruct(_) = self {
+			StackItem::VMStruct(Struct::new(None, Some(self.reference_counter.clone())))
+		} else {
+			StackItem::VMArray(Array::new(None, Some(self.reference_counter.clone())))
+		};
+
+		self.ref_map.insert(self, result.clone());
+
+		for item in self.as_array().iter() {
+			result.as_array_mut().push(item.clone(ref_map, as_immutable));
+		}
+
+		if as_immutable {
+			result.make_read_only();
+		}
+
+		Self {
+			stack_references: self.stack_references,
+			reference_counter: self.reference_counter.clone(),
+			object_references: self.object_references.clone(),
+			dfn: self.dfn,
+			low_link: self.low_link,
+			on_stack: self.on_stack,
+			array: self.array.clone(),
+		}
 	}
 }

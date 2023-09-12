@@ -5,10 +5,10 @@ use std::{
 	iter::FromIterator,
 };
 
-pub struct Tarjan<'a> {
-	stack_items: Vec<&'a StackItem<'a>>,
-	stack: VecDeque<&'a StackItem<'a>>,
-	components: Vec<HashSet<&'a StackItem<'a>>>,
+pub struct Tarjan {
+	stack_items: Vec<&'a StackItem>,
+	stack: VecDeque<&'a StackItem>,
+	components: Vec<HashSet<&'a StackItem>>,
 	index: usize,
 }
 

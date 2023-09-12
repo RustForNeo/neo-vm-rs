@@ -1,10 +1,12 @@
 use crate::{
-	array::Array,
-	compound_type::{CompoundType, CompoundTypeTrait},
 	execution_engine_limits::ExecutionEngineLimits,
 	reference_counter::ReferenceCounter,
 	stack_item::{ObjectReferenceEntry, StackItem, StackItemTrait},
 	stack_item_type::StackItemType,
+	types::compound_types::{
+		array::Array,
+		compound_type::{CompoundType, CompoundTypeTrait},
+	},
 };
 use std::{
 	cell::{Ref, RefCell},
@@ -15,20 +17,21 @@ use std::{
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
-pub struct Struct<'a> {
-	reference_counter: Rc<RefCell<ReferenceCounter<'a>>>,
+pub struct Struct {
+	reference_counter: Rc<RefCell<ReferenceCounter>>,
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
+	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
-	array: Vec<StackItem<'a>>,
+	array: Vec<Rc<RefCell<StackItem>>>,
+	read_only: bool,
 }
 
 impl Struct {
 	/// Create a structure with the specified fields
 	pub fn new(
-		fields: Option<Vec<StackItem>>,
+		fields: Option<Vec<Rc<RefCell<StackItem>>>>,
 		reference_counter: Option<Rc<RefCell<ReferenceCounter>>>,
 	) -> Self {
 		Self {
@@ -42,6 +45,7 @@ impl Struct {
 			low_link: 0,
 			on_stack: false,
 			array: fields.unwrap_or_default(),
+			read_only: false,
 		}
 	}
 
@@ -53,12 +57,12 @@ impl Struct {
 		queue.push_back(&result);
 		queue.push_back(self);
 
-		let mut count = limits.max_stack_size-1;
+		let mut count = limits.max_stack_size - 1;
 		while !queue.is_empty() {
 			let a = queue.pop_front().unwrap();
 			let b = queue.pop_front().unwrap();
 			for item in &b.array {
-				count-=1;
+				count -= 1;
 
 				if count == 0 {
 					panic!("Beyond clone limits!");
@@ -90,6 +94,7 @@ impl Struct {
 			low_link: self.low_link,
 			on_stack: self.on_stack,
 			array: self.array.clone(),
+			read_only: self.read_only,
 		}
 	}
 
@@ -148,8 +153,8 @@ impl Struct {
 	}
 }
 
-impl<'a> StackItemTrait for Struct {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
+impl StackItemTrait for Struct {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -199,12 +204,8 @@ impl<'a> StackItemTrait for Struct {
 		todo!()
 	}
 
-	fn deep_copy(&self, ref_map: &HashMap<StackItem, StackItem>, as_immutable: bool) -> StackItem {
-		todo!()
-	}
-
 	fn get_boolean(&self) -> bool {
-		todo!()
+		true
 	}
 
 	fn get_slice(&self) -> &[u8] {
@@ -221,24 +222,24 @@ impl<'a> StackItemTrait for Struct {
 }
 
 impl CompoundTypeTrait for Struct {
-	fn reference_counter(&self) -> Option<&ReferenceCounter> {
-		todo!()
-	}
-
 	fn count(&self) -> usize {
-		todo!()
+		self.array.len()
 	}
 
-	fn sub_items(&self) -> Vec<&StackItem> {
-		todo!()
+	fn sub_items(&self) -> Vec<Ref<RefCell<StackItem>>> {
+		self.array.iter().collect()
 	}
 
 	fn sub_items_count(&self) -> usize {
-		todo!()
+		self.count()
+	}
+
+	fn read_only(&mut self) {
+		self.read_only = true
 	}
 
 	fn is_read_only(&self) -> bool {
-		todo!()
+		self.read_only
 	}
 
 	fn clear(&mut self) {
@@ -260,6 +261,7 @@ impl From<Array> for Struct {
 			low_link: array.low_link,
 			on_stack: array.on_stack,
 			array: array.array,
+			read_only: array.read_only,
 		}
 	}
 }
@@ -274,6 +276,7 @@ impl From<&Array> for Struct {
 			low_link: array.low_link,
 			on_stack: array.on_stack,
 			array: array.array.clone(),
+			read_only: array.read_only,
 		}
 	}
 }

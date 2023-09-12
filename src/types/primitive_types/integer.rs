@@ -1,8 +1,10 @@
 use crate::{
-	compound_type::{CompoundType, CompoundTypeTrait},
-	primitive_type::{PrimitiveType, PrimitiveTypeTrait},
 	stack_item::{ObjectReferenceEntry, StackItem, StackItemTrait},
 	stack_item_type::StackItemType,
+	types::{
+		compound_types::compound_type::CompoundType,
+		primitive_types::primitive_type::{PrimitiveType, PrimitiveTypeTrait},
+	},
 };
 use num_bigint::BigInt;
 use num_traits::{One, Zero};
@@ -18,9 +20,9 @@ use std::{
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default, Copy)]
-pub struct Integer<'a> {
+pub struct Integer {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
+	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
@@ -151,8 +153,8 @@ impl Rem for Integer {
 	}
 }
 
-impl<'a> StackItemTrait for Integer {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
+impl StackItemTrait for Integer {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -195,10 +197,6 @@ impl<'a> StackItemTrait for Integer {
 	}
 
 	fn cleanup(&mut self) {
-		todo!()
-	}
-
-	fn deep_copy(&self, ref_map: &HashMap<&StackItem, StackItem>, as_immutable: bool) -> StackItem {
 		todo!()
 	}
 

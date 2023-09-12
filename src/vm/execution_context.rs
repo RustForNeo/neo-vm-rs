@@ -11,27 +11,27 @@ use std::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct ExecutionContext<'a> {
-	pub shared_states: SharedStates<'a>,
+pub struct ExecutionContext {
+	pub shared_states: SharedStates,
 	pub instruction_pointer: usize,
 
 	/// The number of return values when this context returns.
 	pub rv_count: i32,
 
 	/// The local variables of this context.
-	pub local_variables: Option<Slot<'a>>,
+	pub local_variables: Option<Slot>,
 
 	/// The arguments passed to this context.
-	pub arguments: Option<Slot<'a>>,
+	pub arguments: Option<Slot>,
 
 	/// The try stack to handle exceptions.
 	pub try_stack: Option<Vec<ExceptionHandlingContext>>,
 }
 
-pub struct SharedStates<'a> {
+pub struct SharedStates {
 	pub(crate) script: Script,
-	pub(crate) evaluation_stack: Rc<RefCell<EvaluationStack<'a>>>,
-	pub(crate) static_fields: Option<Slot<'a>>,
+	pub(crate) evaluation_stack: Rc<RefCell<EvaluationStack>>,
+	pub(crate) static_fields: Option<Slot>,
 	pub(crate) states: HashMap<TypeId, Box<dyn Any>>,
 }
 

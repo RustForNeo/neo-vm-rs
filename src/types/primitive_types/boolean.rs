@@ -1,18 +1,20 @@
 use crate::{
-	compound_type::{CompoundType, CompoundTypeTrait},
-	primitive_type::{PrimitiveType, PrimitiveTypeTrait},
 	stack_item::{ObjectReferenceEntry, StackItem, StackItemTrait},
 	stack_item_type::StackItemType,
 };
 use std::{cell::RefCell, collections::HashMap, hash::Hash, num::TryFromIntError};
 
+use crate::types::{
+	compound_types::compound_type::CompoundType,
+	primitive_types::primitive_type::{PrimitiveType, PrimitiveTypeTrait},
+};
 use num_bigint::BigInt;
 use num_traits::{One, Zero};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Boolean<'a> {
+pub struct Boolean {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
+	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
@@ -59,8 +61,8 @@ impl Boolean {
 	}
 }
 
-impl<'a> StackItemTrait for Boolean {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
+impl StackItemTrait for Boolean {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -104,10 +106,6 @@ impl<'a> StackItemTrait for Boolean {
 
 	fn cleanup(&mut self) {
 		panic!("Boolean cleanup")
-	}
-
-	fn deep_copy(&self, ref_map: &HashMap<&StackItem, StackItem>, as_immutable: bool) -> StackItem {
-		todo!()
 	}
 
 	fn get_boolean(&self) -> bool {

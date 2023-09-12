@@ -11,11 +11,12 @@ use std::{
 	fmt::{Debug, Formatter},
 	hash::{Hash, Hasher},
 	num::TryFromIntError,
+	rc::Rc,
 	string::FromUtf8Error,
 };
 
-pub trait StackItemTrait<'a>: Debug + Hash + Eq {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
+pub trait StackItemTrait: Debug + Hash + Eq {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
 
 	fn dfn(&self) -> isize;
 
@@ -65,8 +66,6 @@ pub trait StackItemTrait<'a>: Debug + Hash + Eq {
 		}
 		panic!("Not implemented")
 	}
-	fn deep_copy(&self, ref_map: &HashMap<StackItem, StackItem>, as_immutable: bool) -> StackItem;
-
 	fn get_boolean(&self) -> bool;
 
 	fn get_integer(&self) -> Result<BigInt, TryFromIntError> {
@@ -94,34 +93,34 @@ pub trait StackItemTrait<'a>: Debug + Hash + Eq {
 	fn equals(&self, other: &Option<StackItem>) -> bool;
 }
 
-pub struct ObjectReferenceEntry<'a> {
-	item: StackItem<'a>,
+pub struct ObjectReferenceEntry {
+	item: Rc<RefCell<StackItem>>,
 	references: i32,
 }
 
-impl<'a> ObjectReferenceEntry {
-	pub fn new(item: StackItem) -> Self {
+impl ObjectReferenceEntry {
+	pub fn new(item: Rc<RefCell<StackItem>>) -> Self {
 		Self { item, references: 0 }
 	}
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
-pub enum StackItem<'a> {
-	VMBuffer(Buffer<'a>),
-	VMByteString(ByteString<'a>),
-	VMBoolean(Boolean<'a>),
-	VMInteger(Integer<'a>),
-	VMPointer(Pointer<'a>),
-	VMArray(Array<'a>),
-	VMStruct(Struct<'a>),
-	VMMap(Map<'a>),
-	InteropInterface(InteropInterface<'a>),
+pub enum StackItem {
+	VMBuffer(Buffer),
+	VMByteString(ByteString),
+	VMBoolean(Boolean),
+	VMInteger(Integer),
+	VMPointer(Pointer),
+	VMArray(Array),
+	VMStruct(Struct),
+	VMMap(Map),
+	InteropInterface(InteropInterface),
 	VMNull(Null),
 }
 
 impl StackItem {
-	pub fn get_stack_item(item: &StackItem) -> Box<dyn StackItemTrait<ObjectReferences = ()>> {
-		match item {
+	pub fn get_stack_item(&self) -> Box<dyn StackItemTrait<ObjectReferences = ()>> {
+		match &self {
 			StackItem::VMBuffer(buffer) => Box::new(buffer),
 			StackItem::VMByteString(byte_string) => Box::new(byte_string),
 			StackItem::VMBoolean(boolean) => Box::new(boolean),
@@ -216,6 +215,10 @@ impl StackItem {
 			StackItem::VMNull(null) => null.get_type(),
 			_ => panic!("Not implemented"),
 		}
+	}
+
+	pub fn as_ref(&self) -> Rc<RefCell<StackItem>> {
+		Rc::new(RefCell::new(self.clone()))
 	}
 }
 
@@ -427,6 +430,12 @@ impl Into<StackItem> for bool {
 	}
 }
 
+impl Into<Rc<RefCell<StackItem>>> for StackItem {
+	fn into(self) -> Rc<RefCell<StackItem>> {
+		Rc::new(RefCell::new(self))
+	}
+}
+
 impl From<bool> for StackItem {
 	fn from(boolean: bool) -> Self {
 		StackItem::VMBoolean(Boolean::new(boolean))
@@ -456,4 +465,3 @@ impl From<&BigInt> for StackItem {
 		StackItem::VMInteger(Integer::new(big_int))
 	}
 }
-

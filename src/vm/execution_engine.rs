@@ -1,8 +1,6 @@
 use crate::{
-	array::Array,
 	buffer::Buffer,
-	byte_string::ByteString,
-	compound_type::CompoundType,
+	compound_types::{array::Array, compound_type::CompoundType, map::Map, Struct::Struct},
 	evaluation_stack::EvaluationStack,
 	exception::{
 		exception_handling_context::ExceptionHandlingContext,
@@ -11,21 +9,20 @@ use crate::{
 	execution_context::{ExecutionContext, SharedStates},
 	execution_engine_limits::ExecutionEngineLimits,
 	instruction::Instruction,
-	map::Map,
 	null::Null,
 	op_code::OpCode,
 	pointer::Pointer,
-	primitive_type::{PrimitiveType, PrimitiveTypeTrait},
+	primitive_types::{byte_string::ByteString, primitive_type::PrimitiveType},
 	reference_counter::ReferenceCounter,
 	slot::Slot,
 	stack_item::{
 		StackItem,
 		StackItem::{VMArray, VMInteger},
+		StackItemTrait,
 	},
 	stack_item_type::StackItemType,
 	vm::{script::Script, vm_exception::VMException},
 	vm_state::VMState,
-	Struct::Struct,
 };
 use num_bigint::{BigInt, Sign};
 use num_traits::{Signed, ToPrimitive, Zero};
@@ -39,27 +36,27 @@ use std::{
 
 /// Represents the VM used to execute the script.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct ExecutionEngine<'a> {
+pub struct ExecutionEngine {
 	/// Restrictions on the VM.
 	pub limits: ExecutionEngineLimits,
 
 	/// Used for reference counting of objects in the VM.
-	pub reference_counter: Rc<RefCell<ReferenceCounter<'a>>>,
+	pub reference_counter: Rc<RefCell<ReferenceCounter>>,
 
 	/// The invocation stack of the VM.
-	pub invocation_stack: Vec<Rc<RefCell<ExecutionContext<'a>>>>,
+	pub invocation_stack: Vec<Rc<RefCell<ExecutionContext>>>,
 
 	/// The top frame of the invocation stack.
-	pub current_context: Option<Rc<RefCell<ExecutionContext<'a>>>>,
+	pub current_context: Option<Rc<RefCell<ExecutionContext>>>,
 
 	/// The bottom frame of the invocation stack.
-	pub entry_context: Option<Rc<RefCell<ExecutionContext<'a>>>>,
+	pub entry_context: Option<Rc<RefCell<ExecutionContext>>>,
 
 	/// The stack to store the return values.
-	pub result_stack: Rc<RefCell<EvaluationStack<'a>>>,
+	pub result_stack: Rc<RefCell<EvaluationStack>>,
 
 	/// The VM object representing the uncaught exception.
-	pub uncaught_exception: Option<StackItem<'a>>,
+	pub uncaught_exception: Option<Rc<RefCell<StackItem>>>,
 
 	/// The current state of the VM.
 	pub state: VMState,
@@ -149,22 +146,32 @@ impl ExecutionEngine {
 		}
 	}
 
-	fn pop(&mut self) -> StackItem {
-		self.current_context.unwrap().shared_states.evaluation_stack.pop().unwrap()
-		// panic!("Not implemented")
+	fn pop(&mut self) -> Rc<RefCell<StackItem>> {
+		self.current_context
+			.unwrap()
+			.get_mut()
+			.shared_states
+			.evaluation_stack
+			.pop()
+			.unwrap()
 	}
 
-	fn push(&mut self, item: StackItem) {
-		self.current_context.unwrap().shared_states.evaluation_stack.push(item);
-		// panic!("Not implemented")
+	fn push(&mut self, item: Rc<RefCell<StackItem>>) {
+		self.current_context
+			.unwrap()
+			.get_mut()
+			.shared_states
+			.evaluation_stack
+			.push(item);
 	}
 
-	fn peek(&self, index: usize) -> &StackItem {
+	fn peek(&self, index: usize) -> Rc<RefCell<StackItem>> {
 		self.current_context
 			.unwrap()
 			.borrow()
 			.shared_states
 			.evaluation_stack
+			.get_mut()
 			.peek(index as i64)
 			.unwrap()
 	}
@@ -177,9 +184,9 @@ impl ExecutionEngine {
 			| OpCode::PushInt32
 			| OpCode::PushInt64
 			| OpCode::PushInt128
-			| OpCode::PushInt256 => self.push(StackItem::from(VMInteger::from(instr.operand))),
-			OpCode::PushTrue => self.push(StackItem::from(true)),
-			OpCode::PushFalse => self.push(StackItem::from(false)),
+			| OpCode::PushInt256 => self.push(StackItem::from(VMInteger::from(instr.operand)).into()),
+			OpCode::PushTrue => self.push(StackItem::from(true).into()),
+			OpCode::PushFalse => self.push(StackItem::from(false).into()),
 			OpCode::PushA => {
 				let position = (self.current_context.unwrap().instruction_pointer as i32)
 					.checked_add(instr.token_i32())
@@ -191,15 +198,18 @@ impl ExecutionEngine {
 					return Err(VMException::new(Error::new("Bad pointer address")))
 				}
 
-				self.push(StackItem::VMPointer(Pointer::new(
-					self.current_context.unwrap().shared_states.script,
-					position as usize,
-				)))
+				self.push(
+					StackItem::VMPointer(Pointer::new(
+						self.current_context.unwrap().shared_states.script,
+						position as usize,
+					))
+					.into(),
+				)
 			},
-			OpCode::PushNull => self.push(StackItem::VMNull(Null::default())),
+			OpCode::PushNull => self.push(StackItem::VMNull(Null::default()).into()),
 			OpCode::PushData1 | OpCode::PushData2 | OpCode::PushData4 => {
 				self.limits.assert_max_item_size(instr.operand.len() as u32);
-				self.push(StackItem::from(instr.operand))
+				self.push(StackItem::from(instr.operand).into())
 			},
 			OpCode::PushM1
 			| OpCode::Push0
@@ -218,7 +228,7 @@ impl ExecutionEngine {
 			| OpCode::Push13
 			| OpCode::Push14
 			| OpCode::Push15
-			| OpCode::Push16 => self.push(StackItem::VMInteger(instr.opcode - OpCode::Push0)),
+			| OpCode::Push16 => self.push(StackItem::VMInteger(instr.opcode - OpCode::Push0).into()),
 
 			// Control
 			OpCode::Nop => Ok(VMState::None),
@@ -465,12 +475,12 @@ impl ExecutionEngine {
 				.Insert(2, self.peek(0)),
 			OpCode::Swap => {
 				let x = self.current_context.unwrap().shared_states.evaluation_stack.remove(1);
-				self.push(StackItem::from(x))
+				self.push(StackItem::from(x).into())
 				// break;
 			},
 			OpCode::Rot => {
 				let x = self.current_context.unwrap().shared_states.evaluation_stack.remove(2);
-				self.push(StackItem::from(x))
+				self.push(StackItem::from(x).into())
 			},
 			OpCode::Roll => {
 				let n = self.pop().get_integer().to_i64().unwrap();
@@ -485,7 +495,7 @@ impl ExecutionEngine {
 					return Ok(VMState::None)
 				}
 				let x = self.current_context.unwrap().shared_states.evaluation_stack.remove(n);
-				self.push(StackItem::from(x))
+				self.push(StackItem::from(x).into())
 			},
 			OpCode::Reverse3 => self.current_context.unwrap().evaluation_stack.Reverse(3),
 			OpCode::Reverse4 => self.current_context.unwrap().evaluation_stack.Reverse(4),
@@ -640,7 +650,7 @@ impl ExecutionEngine {
 			OpCode::NewBuffer => {
 				let length = self.pop().get_integer();
 				self.limits.assert_max_item_size(length.to_u32().unwrap());
-				self.push(StackItem::VMBuffer(Buffer::new(length.to_usize().unwrap())))
+				self.push(StackItem::from(Buffer::new(length.to_usize().unwrap())).into())
 			},
 			OpCode::MemCpy => {
 				let count = self.pop().get_integer().to_i64().unwrap();
@@ -683,7 +693,7 @@ impl ExecutionEngine {
 				let result = Buffer::new(length); //, false);
 				x1.CopyTo(result.InnerBuffer.Span);
 				x2.CopyTo(result.InnerBuffer.Span[x1.Length..]);
-				self.push(StackItem::from(result))
+				self.push(StackItem::from(result).into())
 				// break;
 			},
 			OpCode::Substr => {
@@ -707,7 +717,7 @@ impl ExecutionEngine {
 				}
 				let result = Buffer::new(count); //, false);
 				x.Slice(index, count).CopyTo(result.InnerBuffer.Span);
-				self.push(StackItem::from(result))
+				self.push(StackItem::from(result).into())
 			},
 			OpCode::Left => {
 				let count = self.pop().get_integer().to_i32().unwrap();
@@ -724,7 +734,7 @@ impl ExecutionEngine {
 				}
 				let result = Buffer::new(count as usize); //, false);
 				x[..count].CopyTo(result.InnerBuffer.Span);
-				self.push(StackItem::from(result))
+				self.push(StackItem::from(result).into())
 			},
 			OpCode::Right => {
 				let count = self.pop().get_integer().to_i32().unwrap();
@@ -741,29 +751,29 @@ impl ExecutionEngine {
 				}
 				let result = Buffer::from(x); //, false);
 							  // x[^count.. ^ 0].CopyTo(result.InnerBuffer.Span);
-				self.push(StackItem::VMBuffer(result))
+				self.push(StackItem::from(result).into())
 				// break;
 			},
 
 			// Bitwise logic
 			OpCode::Invert => {
 				let x = self.pop().get_integer();
-				self.push(StackItem::from(BigInt::neg(x)))
+				self.push(StackItem::from(BigInt::neg(x)).into())
 			},
 			OpCode::And => {
 				let x2 = self.pop().get_integer();
 				let x1 = self.pop().get_integer();
-				self.push(StackItem::from(x1 & x2))
+				self.push(StackItem::from(x1 & x2).into())
 			},
 			OpCode::Or => {
 				let x2 = self.pop().get_integer();
 				let x1 = self.pop().get_integer();
-				self.push(StackItem::from(x1 | x2))
+				self.push(StackItem::from(x1 | x2).into())
 			},
 			OpCode::Xor => {
 				let x2 = self.pop().get_integer();
 				let x1 = self.pop().get_integer();
-				self.push(StackItem::from(x1 ^ x2))
+				self.push(StackItem::from(x1 ^ x2).into())
 			},
 			OpCode::Equal => {
 				let x2 = self.pop();
@@ -779,61 +789,61 @@ impl ExecutionEngine {
 			// Numeric
 			OpCode::Sign => {
 				let x = self.pop().get_integer();
-				self.push(StackItem::from(x.Sign))
+				self.push(StackItem::from(x.Sign).into())
 			},
 			OpCode::Abs => {
 				let x = self.pop().get_integer();
-				self.push(StackItem::from(BigInt::abs(&x)))
+				self.push(StackItem::from(BigInt::abs(&x)).into())
 			},
 			OpCode::Negate => {
 				let x = self.pop().get_integer();
-				self.push(StackItem::from(-x))
+				self.push(StackItem::from(-x).into())
 			},
 			OpCode::Inc => {
 				let x = self.pop().get_integer();
-				self.push(StackItem::from(x + 1))
+				self.push(StackItem::from(x + 1).into())
 			},
 			OpCode::Dec => {
 				let x = self.pop().get_integer();
-				self.push(StackItem::from(x - 1))
+				self.push(StackItem::from(x - 1).into())
 			},
 			OpCode::Add => {
 				let x2 = self.pop().get_integer();
 				let x1 = self.pop().get_integer();
-				self.push(StackItem::from(x1 + x2))
+				self.push(StackItem::from(x1 + x2).into())
 			},
 			OpCode::Sub => {
 				let x2 = self.pop().get_integer();
 				let x1 = self.pop().get_integer();
-				self.push(StackItem::from(x1 - x2))
+				self.push(StackItem::from(x1 - x2).into())
 			},
 			OpCode::Mul => {
 				let x2 = self.pop().get_integer();
 				let x1 = self.pop().get_integer();
-				self.push(StackItem::from(x1 * x2))
+				self.push(StackItem::from(x1 * x2).into())
 			},
 			OpCode::Div => {
 				let x2 = self.pop().get_integer();
 				let x1 = self.pop().get_integer();
-				self.push(StackItem::from(x1 / x2))
+				self.push(StackItem::from(x1 / x2).into())
 			},
 			OpCode::Mod => {
 				let x2 = self.pop().get_integer();
 				let x1 = self.pop().get_integer();
-				self.push(StackItem::from(x1 % x2))
+				self.push(StackItem::from(x1 % x2).into())
 			},
 			OpCode::Pow => {
 				let exponent = self.pop().get_integer().to_i32().unwrap();
 				self.limits.assert_shift(exponent);
 				let value = self.pop().get_integer();
-				self.push(StackItem::from(value.pow(exponent as u32)))
+				self.push(StackItem::from(value.pow(exponent as u32)).into())
 			},
 			OpCode::Sqrt => self.push(self.pop().get_integer().Sqrt()),
 			OpCode::ModMul => {
 				let modulus = self.pop().get_integer();
 				let x2 = self.pop().get_integer();
 				let x1 = self.pop().get_integer();
-				self.push(StackItem::from(x1 * x2 % modulus))
+				self.push(StackItem::from(x1 * x2 % modulus).into())
 			},
 			OpCode::ModPow => {
 				let modulus = self.pop().get_integer();
@@ -844,7 +854,7 @@ impl ExecutionEngine {
 					false => value.ModPow(exponent, modulus),
 				};
 				// } value.ModInverse(modulus) :  BigInteger.ModPow(value, exponent, modulus);
-				self.push(StackItem::from(result))
+				self.push(StackItem::from(result).into())
 			},
 			OpCode::Shl => {
 				let shift = self.pop().get_integer().to_i32().unwrap();
@@ -853,7 +863,7 @@ impl ExecutionEngine {
 					return Ok(VMState::None)
 				}
 				let x = self.pop().get_integer();
-				self.push(StackItem::from(x << shift))
+				self.push(StackItem::from(x << shift).into())
 			},
 			OpCode::Shr => {
 				let shift = self.pop().get_integer().to_i32().unwrap();
@@ -862,35 +872,35 @@ impl ExecutionEngine {
 					return Ok(VMState::None) // break;
 				}
 				let x = self.pop().get_integer();
-				self.push(StackItem::from(x >> shift))
+				self.push(StackItem::from(x >> shift).into())
 			},
 			OpCode::Not => {
 				let x = self.pop().get_bool();
-				self.push(StackItem::from(!x))
+				self.push(StackItem::from(!x).into())
 			},
 			OpCode::BoolAnd => {
 				let x2 = self.pop().get_bool();
 				let x1 = self.pop().get_bool();
-				self.push(StackItem::from(x1 && x2))
+				self.push(StackItem::from(x1 && x2).into())
 			},
 			OpCode::BoolOr => {
 				let x2 = self.pop().get_bool();
 				let x1 = self.pop().get_bool();
-				self.push(StackItem::from(x1 || x2))
+				self.push(StackItem::from(x1 || x2).into())
 			},
 			OpCode::Nz => {
 				let x = self.pop().get_integer();
-				self.push(StackItem::from(!x.is_zero()))
+				self.push(StackItem::from(!x.is_zero()).into())
 			},
 			OpCode::NumEqual => {
 				let x2 = self.pop().get_integer();
 				let x1 = self.pop().get_integer();
-				self.push(StackItem::from(x1 == x2))
+				self.push(StackItem::from(x1 == x2).into())
 			},
 			OpCode::NumNotEqual => {
 				let x2 = self.pop().get_integer();
 				let x1 = self.pop().get_integer();
-				self.push(StackItem::from(x1 != x2))
+				self.push(StackItem::from(x1 != x2).into())
 			},
 			OpCode::Lt => {
 				let x2 = self.pop();
@@ -898,9 +908,9 @@ impl ExecutionEngine {
 				if x1.get_item_type() == StackItemType::Any
 					|| x2.get_item_type() == StackItemType::Any
 				{
-					self.push(StackItem::from(false))
+					self.push(StackItem::from(false).into())
 				} else {
-					self.push(StackItem::from(x1.get_integer() < x2.get_integer()))
+					self.push(StackItem::from(x1.get_integer() < x2.get_integer()).into())
 				}
 			},
 			OpCode::Le => {
@@ -909,9 +919,9 @@ impl ExecutionEngine {
 				if x1.get_item_type() == StackItemType::Any
 					|| x2.get_item_type() == StackItemType::Any
 				{
-					self.push(StackItem::from(false))
+					self.push(StackItem::from(false).into())
 				} else {
-					self.push(StackItem::from(x1.get_integer() <= x2.get_integer()))
+					self.push(StackItem::from(x1.get_integer() <= x2.get_integer()).into())
 				}
 				// break;
 			},
@@ -921,9 +931,9 @@ impl ExecutionEngine {
 				if x1.get_item_type() == StackItemType::Any
 					|| x2.get_item_type() == StackItemType::Any
 				{
-					self.push(StackItem::from(false))
+					self.push(StackItem::from(false).into())
 				} else {
-					self.push(StackItem::from(x1.get_integer() > x2.get_integer()))
+					self.push(StackItem::from(x1.get_integer() > x2.get_integer()).into())
 				}
 				// break;
 			},
@@ -933,28 +943,28 @@ impl ExecutionEngine {
 				if x1.get_item_type() == StackItemType::Any
 					|| x2.get_item_type() == StackItemType::Any
 				{
-					self.push(StackItem::from(false))
+					self.push(StackItem::from(false).into())
 				} else {
-					self.push(StackItem::from(x1.get_integer() >= x2.get_integer()))
+					self.push(StackItem::from(x1.get_integer() >= x2.get_integer()).into())
 				}
 				// break;
 			},
 			OpCode::Min => {
 				let x2 = self.pop().get_integer();
 				let x1 = self.pop().get_integer();
-				self.push(StackItem::from(BigInt::min(x1, x2)))
+				self.push(StackItem::from(BigInt::min(x1, x2)).into())
 			},
 			OpCode::Max => {
 				let x2 = self.pop().get_integer();
 				let x1 = self.pop().get_integer();
-				self.push(StackItem::from(BigInt::max(x1, x2)))
+				self.push(StackItem::from(BigInt::max(x1, x2)).into())
 				// break;
 			},
 			OpCode::Within => {
 				let b = self.pop().get_integer();
 				let a = self.pop().get_integer();
 				let x = self.pop().get_integer();
-				self.push(StackItem::from(a <= x && x < b))
+				self.push(StackItem::from(a <= x && x < b).into())
 			},
 
 			// Compound-type
@@ -971,7 +981,7 @@ impl ExecutionEngine {
 					let value = self.pop();
 					map[key] = value;
 				}
-				self.push(StackItem::VMMap(map))
+				self.push(StackItem::VMMap(map).into())
 			},
 			OpCode::PackStruct => {
 				let size = self.pop().get_integer().to_i64().unwrap();
@@ -985,7 +995,7 @@ impl ExecutionEngine {
 					let item = self.pop();
 					_struct.Add(item);
 				}
-				self.push(StackItem::VMStruct(_struct))
+				self.push(StackItem::VMStruct(_struct).into())
 				// break;
 			},
 			OpCode::Pack => {
@@ -1002,21 +1012,21 @@ impl ExecutionEngine {
 					let item = self.pop();
 					array.Add(item);
 				}
-				self.push(StackItem::VMArray(array))
+				self.push(StackItem::from(array).into())
 			},
 			OpCode::Unpack => {
 				let compound: CompoundType = self.pop().into();
 				match compound {
 					CompoundType::VMMap(map) =>
 						for (key, value) in map.values().rev() {
-							self.push((value as PrimitiveType).into());
-							self.push(key as StackItem);
+							self.push((value as PrimitiveType).into().into());
+							self.push((key as StackItem).into());
 						},
 
 					// break;
 					CompoundType::VMArray(array) =>
 						for i in (0..=array.array.len()).rev() {
-							self.push(array[i]);
+							self.push(array[i].into());
 						},
 					// break;
 					_ =>
@@ -1024,10 +1034,11 @@ impl ExecutionEngine {
 							"Invalid type for {instr.OpCode}: {compound.Type}".parse().unwrap(),
 						)),
 				}
-				self.push(StackItem::from(compound.Count))
+				self.push(StackItem::from(compound.Count).into())
 			},
-			OpCode::NewArray0 => self
-				.push(StackItem::VMArray(Array::new(None, Some(self.reference_counter.clone())))),
+			OpCode::NewArray0 => self.push(
+				StackItem::from(Array::new(None, Some(self.reference_counter.clone()))).into(),
+			),
 			OpCode::NewArray | OpCode::NewArrayT => {
 				let n = self.pop().get_integer().to_i64().unwrap();
 				if n < 0 || n > self.limits.MaxStackSize {
@@ -1046,21 +1057,23 @@ impl ExecutionEngine {
 					item = match _type as StackItemType {
 						StackItemType::Boolean => StackItem::from(false),
 						StackItemType::Integer => StackItem::from(BigInt::zero()),
-						StackItemType::ByteString =>
-							StackItem::VMByteString(ByteString::new(Vec::new())),
-						_ => StackItem::VMNull(Null::default()),
+						StackItemType::ByteString => StackItem::from(ByteString::new(Vec::new())),
+						_ => StackItem::from(Null::default()),
 					};
 				} else {
 					item = StackItem::VMNull(Null::default());
 				}
-				self.push(StackItem::from(Array::new(
-					std::iter::repeat(item).take(n as usize).collect(),
-					Some(self.reference_counter.clone()),
-				)))
-				// break;
+				self.push(
+					StackItem::from(Array::new(
+						std::iter::repeat(item).take(n as usize).collect(),
+						Some(self.reference_counter.clone()),
+					))
+					.into(),
+				)
 			},
-			OpCode::NewStruct0 =>
-				self.push(StackItem::from(Struct::new(None, Some(self.reference_counter.clone())))),
+			OpCode::NewStruct0 => self.push(
+				StackItem::from(Struct::new(None, Some(self.reference_counter.clone()))).into(),
+			),
 			OpCode::NewStruct => {
 				let n = self.pop().get_integer() as usize;
 				if n < 0 || n > self.limits.max_stack_size {
@@ -1072,20 +1085,22 @@ impl ExecutionEngine {
 				for i in 0..n {
 					result.Add(StackItem::from(Null::default()));
 				}
-				self.push(StackItem::from(result))
+				self.push(StackItem::from(result).into())
 				// break;
 			},
 			OpCode::NewMap =>
-				self.push(StackItem::from(Map::new(Some(self.reference_counter.clone())))),
+				self.push(StackItem::from(Map::new(Some(self.reference_counter.clone()))).into()),
 			OpCode::Size => {
 				let x = self.pop();
 				match x {
-					StackItem::VMArray(array) => self.push(StackItem::from(array.Count)),
-					StackItem::VMMap(map) => self.push(StackItem::from(map.Count)),
-					StackItem::VMStruct(_struct) => self.push(StackItem::from(_struct.Count)),
-					StackItem::VMByteString(array) => self.push(StackItem::from(array.Size)),
-					StackItem::VMBuffer(buffer) => self.push(StackItem::from(buffer.Size)),
-					StackItem::VMInteger(integer) => self.push(StackItem::from(integer.size())),
+					StackItem::VMArray(array) => self.push(StackItem::from(array.Count).into()),
+					StackItem::VMMap(map) => self.push(StackItem::from(map.Count).into()),
+					StackItem::VMStruct(_struct) =>
+						self.push(StackItem::from(_struct.Count).into()),
+					StackItem::VMByteString(array) => self.push(StackItem::from(array.Size).into()),
+					StackItem::VMBuffer(buffer) => self.push(StackItem::from(buffer.Size).into()),
+					StackItem::VMInteger(integer) =>
+						self.push(StackItem::from(integer.size()).into()),
 					_ =>
 						return Err(VMException::InvalidOpcode(
 							"Invalid type for {instr.OpCode}: {x.Type}".parse().unwrap(),
@@ -1093,10 +1108,11 @@ impl ExecutionEngine {
 				}
 			},
 			OpCode::HasKey => {
-				let key: PrimitiveType = self.pop().into();
+				let key: Rc<RefCell<PrimitiveType>> = self.pop().into();
 				let x = self.pop();
 				match x {
-					StackItem::VMMap(map) => self.push(StackItem::from(map.contains_key(&key))),
+					StackItem::VMMap(map) =>
+						self.push(StackItem::from(map.contains_key(key)).into()),
 					StackItem::VMByteString(array) => {
 						let index = key.get_integer().to_u32().unwrap();
 						if index < 0 {
@@ -1106,7 +1122,7 @@ impl ExecutionEngine {
 									.unwrap(),
 							))
 						}
-						self.push(StackItem::from(index < array.Size))
+						self.push(StackItem::from(index < array.size() as u32).into())
 					},
 					StackItem::VMBuffer(buffer) => {
 						let index = key.get_integer().to_u32().unwrap();
@@ -1117,7 +1133,7 @@ impl ExecutionEngine {
 									.unwrap(),
 							))
 						}
-						self.push(StackItem::from(index < buffer.Size))
+						self.push(StackItem::from(index < buffer.size() as u32).into())
 					},
 					StackItem::VMArray(array) => {
 						let index = key.get_integer().to_u32().unwrap();
@@ -1129,7 +1145,7 @@ impl ExecutionEngine {
 							))
 						}
 
-						self.push(StackItem::from(index < array.Count))
+						self.push(StackItem::from(index < array.count() as u32).into())
 					},
 					_ =>
 						return Err(VMException::InvalidOpcode(
@@ -1140,7 +1156,13 @@ impl ExecutionEngine {
 			},
 			OpCode::Keys => {
 				let map: Map = self.pop().into();
-				self.push(VMArray(VMArray::new(&self.reference_counter, map.Keys)))
+				self.push(
+					StackItem::from(Array::new(
+						Some(map.keys()),
+						Some(self.reference_counter.clone()),
+					))
+					.into(),
+				)
 			},
 			OpCode::Values => {
 				let x = self.pop();
@@ -1161,10 +1183,10 @@ impl ExecutionEngine {
 					}
 				}
 
-				self.push(StackItem::VMArray(new_array))
+				self.push(StackItem::from(new_array).into())
 			},
 			OpCode::PickItem => {
-				let key: PrimitiveType = self.pop().into();
+				let key: Rc<RefCell<PrimitiveType>> = self.pop().into();
 				let x = self.pop();
 				match x {
 					StackItem::VMArray(array) => {
@@ -1177,14 +1199,14 @@ impl ExecutionEngine {
 						self.push(array[index])
 					},
 					StackItem::VMMap(map) => {
-						let value = match map.get(&key) {
+						let value = match map.get(key) {
 							Some(v) => v,
 							None =>
 								return Err(VMException::InvalidOpcode(
 									"Key not found in {nameof(Map)}".parse().unwrap(),
 								)),
 						};
-						self.push(StackItem::from(value))
+						self.push(StackItem::from(value).into())
 					},
 					StackItem::VMByteString(byte_string) => {},
 					StackItem::VMBoolean(boolean) => {},
@@ -1196,10 +1218,13 @@ impl ExecutionEngine {
 								"The value {index} is out of range.".parse().unwrap(),
 							))
 						}
-						self.push(StackItem::from(BigInt::from_bytes_le(
-							Sign::NoSign,
-							byte_array.get(index).unwrap(),
-						)))
+						self.push(
+							StackItem::from(BigInt::from_bytes_le(
+								Sign::NoSign,
+								byte_array.get(index).unwrap(),
+							))
+							.into(),
+						)
 					},
 					StackItem::VMBuffer(buffer) => {
 						let index = key.get_integer().to_i64().unwrap();
@@ -1208,10 +1233,13 @@ impl ExecutionEngine {
 								"The value {index} is out of range.".parse().unwrap(),
 							))
 						}
-						self.push(StackItem::from(BigInt::from_bytes_le(
-							Sign::NoSign,
-							buffer.get_slice().get(index).unwrap(),
-						)))
+						self.push(
+							StackItem::from(BigInt::from_bytes_le(
+								Sign::NoSign,
+								buffer.get_slice().get(index).unwrap(),
+							))
+							.into(),
+						)
 					},
 					_ =>
 						return Err(VMException::InvalidOpcode(
@@ -1288,9 +1316,9 @@ impl ExecutionEngine {
 				}
 			},
 			OpCode::Remove => {
-				let key: PrimitiveType = self.pop().into();
+				let key: Rc<RefCell<PrimitiveType>> = self.pop().into();
 				let x = self.pop();
-				match (x) {
+				match x {
 					StackItem::VMArray(mut array) => {
 						let index = key.get_integer().to_i32().unwrap();
 						if index < 0 || index >= array.Count {
@@ -1321,7 +1349,7 @@ impl ExecutionEngine {
 			//Types
 			OpCode::IsNull => {
 				let x = self.pop();
-				self.push(StackItem::from(x.get_item_type() == StackItemType::Any))
+				self.push(StackItem::from(x.get_item_type() == StackItemType::Any).into())
 			},
 			OpCode::IsType => {
 				let x = self.pop();
@@ -1329,7 +1357,7 @@ impl ExecutionEngine {
 				if _type == StackItemType::Any || !StackItemType::is_valid(instr.token_u8()) {
 					return Err(VMException::InvalidOpcode("Invalid type: {type}".parse().unwrap()))
 				}
-				self.push(StackItem::from(x.get_item_type() == _type))
+				self.push(StackItem::from(x.get_item_type() == _type).into())
 			},
 			OpCode::Convert => {
 				let x = self.pop();
@@ -1381,7 +1409,7 @@ impl ExecutionEngine {
 
 	fn handle_error(&mut self, err: Error) {
 		self.state = VMState::Fault;
-		self.uncaught_exception = Some(StackItem::VMNull(Null::default()));
+		self.uncaught_exception = Some(StackItem::from(Null::default()).into());
 	}
 
 	fn load_context(&mut self, context: &Rc<RefCell<ExecutionContext>>) {
@@ -1522,7 +1550,7 @@ impl ExecutionEngine {
 		self.is_jumping = true;
 	}
 
-	fn execute_throw(&mut self, exception: StackItem) {
+	fn execute_throw(&mut self, exception: Rc<RefCell<StackItem>>) {
 		self.uncaught_exception = Some(exception);
 		self.handle_exception();
 	}

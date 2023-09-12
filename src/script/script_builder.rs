@@ -1,6 +1,7 @@
 use crate::op_code::OpCode;
 use num_bigint::BigInt;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ScriptBuilder {
 	output: Vec<u8>,
 }

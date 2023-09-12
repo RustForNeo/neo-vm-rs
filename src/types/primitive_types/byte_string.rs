@@ -1,26 +1,19 @@
-use std::{
-	cell::RefCell,
-	collections::HashMap,
-	convert::TryInto,
-	hash::{Hash, Hasher},
-	io::Cursor,
-	mem::size_of,
-};
+use std::{cell::RefCell, collections::HashMap, convert::TryInto, hash::Hash, io::Cursor};
 
 use crate::{
-	compound_type::{CompoundType, CompoundTypeTrait},
-	get_stack_item_data,
-	primitive_type::{PrimitiveType, PrimitiveTypeTrait},
 	stack_item::{ObjectReferenceEntry, StackItem, StackItemTrait},
 	stack_item_type::StackItemType,
+	types::{
+		compound_types::compound_type::CompoundType,
+		primitive_types::primitive_type::{PrimitiveType, PrimitiveTypeTrait},
+	},
 };
 use murmur3::murmur3_32;
-use num_bigint::BigInt;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct ByteString<'a> {
+pub struct ByteString {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>,
+	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
@@ -61,8 +54,8 @@ impl ByteString {
 	}
 }
 
-impl<'a> StackItemTrait for ByteString {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType<'a>, ObjectReferenceEntry<'a>>>>;
+impl StackItemTrait for ByteString {
+	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -109,10 +102,6 @@ impl<'a> StackItemTrait for ByteString {
 	}
 
 	fn convert_to(&self, ty: StackItemType) -> StackItem {
-		todo!()
-	}
-
-	fn deep_copy(&self, ref_map: &HashMap<&StackItem, StackItem>, as_immutable: bool) -> StackItem {
 		todo!()
 	}
 
