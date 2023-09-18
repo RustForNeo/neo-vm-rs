@@ -5,11 +5,11 @@
 extern crate core;
 
 pub use num_bigint::BigInt;
-mod exception;
-mod script;
-mod types;
+pub mod exception;
+pub mod script;
+pub mod types;
 
-mod vm;
+pub mod vm;
 
 pub use exception::*;
 pub use script::*;

@@ -1,7 +1,8 @@
 use crate::op_code::OpCode;
 use num_bigint::BigInt;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash,Serialize,Deserialize)]
 pub struct ScriptBuilder {
 	output: Vec<u8>,
 }

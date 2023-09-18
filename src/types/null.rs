@@ -1,6 +1,4 @@
 use crate::{
-	compound_type::CompoundType,
-	primitive_type::PrimitiveType,
 	stack_item::{ObjectReferenceEntry, StackItem, StackItemTrait},
 	stack_item_type::StackItemType,
 };
@@ -10,10 +8,17 @@ use std::{
 	fmt::{Debug, Formatter},
 	hash::{Hash, Hasher},
 };
+use crate::compound_types::compound_type::CompoundType;
 
 /// Represents `null` in the vm.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
-pub struct Null;
+pub struct Null {
+	dfn:isize,
+	low_link: usize,
+	on_stack: bool,
+	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	stack_references: u32,
+}
 
 impl StackItemTrait for Null {
 	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;

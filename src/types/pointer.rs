@@ -1,11 +1,11 @@
 use std::{cell::RefCell, collections::HashMap, hash::Hash};
 
 use crate::{
-	compound_type::CompoundType,
 	stack_item::{ObjectReferenceEntry, StackItem, StackItemTrait},
 	stack_item_type::StackItemType,
 	vm::script::Script,
 };
+use crate::compound_types::compound_type::CompoundType;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Pointer {

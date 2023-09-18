@@ -1,8 +1,3 @@
-use crate::{
-	compound_type::{CompoundType, CompoundTypeTrait},
-	stack_item::{ObjectReferenceEntry, StackItem, StackItemTrait},
-	stack_item_type::StackItemType,
-};
 use std::{
 	any::{Any, TypeId},
 	cell::RefCell,
@@ -10,6 +5,9 @@ use std::{
 	fmt::{Debug, Formatter},
 	hash::{Hash, Hasher},
 };
+use crate::compound_types::compound_type::CompoundType;
+use crate::stack_item::{ObjectReferenceEntry, StackItem, StackItemTrait};
+use crate::stack_item_type::StackItemType;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default, Copy)]
 pub struct InteropInterface {

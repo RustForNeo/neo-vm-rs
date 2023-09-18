@@ -1,5 +1,4 @@
 use crate::{
-	compound_type::CompoundTypeTrait,
 	stack_item::{StackItem, StackItemTrait},
 };
 use std::{
@@ -10,6 +9,7 @@ use std::{
 	marker::PhantomData,
 	rc::Rc,
 };
+use crate::compound_types::compound_type::CompoundTypeTrait;
 
 #[derive(Debug)]
 pub struct ReferenceEntry<T>
@@ -63,7 +63,7 @@ impl ReferenceCounter {
 
 		self.tracked_items.insert(item.clone());
 
-		if let Some(refs) = &mut item.object_references {
+		if let Some(refs) = &mut item.borrow().get_stack_item().object_references {
 			if let Some(entry) = refs.get_mut(parent) {
 				entry.references += 1;
 			} else {

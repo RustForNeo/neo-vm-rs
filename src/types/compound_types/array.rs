@@ -217,14 +217,14 @@ impl Into<StackItem> for Array {
 }
 
 impl Clone for Array {
-	fn clone(&self) -> Self {
+	fn clone(&mut self) -> Self {
 		let result = if let StackItem::VMStruct(_) = self {
 			StackItem::VMStruct(Struct::new(None, self.reference_counter.clone()))
 		} else {
 			StackItem::VMArray(Array::new(None, self.reference_counter.clone()))
 		};
 
-		self.ref_map.insert(self, result.clone());
+		self.array.insert(self, result.clone());
 
 		for item in self.as_array().iter() {
 			result.as_array_mut().push(item.clone(ref_map, as_immutable));
@@ -242,6 +242,7 @@ impl Clone for Array {
 			low_link: self.low_link,
 			on_stack: self.on_stack,
 			array: self.array.clone(),
+			read_only: false,
 		}
 	}
 }
