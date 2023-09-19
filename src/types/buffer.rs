@@ -1,15 +1,19 @@
 use crate::{
-    stack_item::{ObjectReferenceEntry, StackItem, StackItem::VMByteString, StackItem},
+    stack_item::{ObjectReferenceEntry, StackItem::VMByteString, StackItem},
     stack_item_type::StackItemType,
     types::compound_types::compound_type::CompoundType,
 };
 use num_bigint::{BigInt, Sign};
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, os::unix::raw::ino_t, vec::Vec};
+use crate::execution_engine_limits::ExecutionEngineLimits;
+use crate::primitive_types::boolean::Boolean;
+use crate::primitive_types::byte_string::ByteString;
+use crate::primitive_types::primitive_type::PrimitiveType;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct Buffer {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	object_references: RefCell<Option<HashMap<dyn CompoundType, ObjectReferenceEntry>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
@@ -65,7 +69,11 @@ impl Drop for Buffer {
 }
 
 impl StackItem for Buffer {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
+	const TRUE: Self = ();
+
+	const FALSE: Self = ();
+
+	const NULL: Self = ();
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -111,22 +119,6 @@ impl StackItem for Buffer {
 		todo!()
 	}
 
-	fn deep_copy(
-		&self,
-		_ref_map: &HashMap<&StackItem, Box<StackItem>>,
-		as_immutable: bool,
-	) -> StackItem {
-		if as_immutable {
-			VMByteString::from(self.to_vec()).into()
-		} else {
-			Buffer::from_slice(self.as_slice()).into()
-		}
-	}
-
-	fn get_boolean(&self) -> bool {
-		true
-	}
-
 	fn get_slice(&self) -> &[u8] {
 		self.as_slice()
 	}
@@ -135,17 +127,47 @@ impl StackItem for Buffer {
 		StackItemType::Buffer
 	}
 
-	fn equals(&self, other: &Option<StackItem>) -> bool {
+	fn get_boolean(&self) -> bool {
+		true
+	}
+	fn deep_copy(
+		&self,
+		_ref_map: &HashMap<&dyn StackItem, Box<dyn StackItem>>,
+		as_immutable: bool,
+	) -> Box<dyn StackItem> {
+		if as_immutable {
+			ByteString::from(self.to_vec()).into()
+		} else {
+			Buffer::from_slice(self.as_slice()).into()
+		}
+	}
+	fn deep_copy_with_ref_map(&self, ref_map: &HashMap<&dyn StackItem, &dyn StackItem>, asImmutable: bool) -> Box<dyn StackItem> {
+		todo!()
+	}
+
+	fn equals(&self, other: &Option<dyn StackItem>) -> bool {
+		todo!()
+	}
+
+	fn equals_with_limits(&self, other: &dyn StackItem, limits: &ExecutionEngineLimits) -> bool {
+		todo!()
+	}
+
+	fn get_integer(&self) -> BigInt {
+		todo!()
+	}
+
+	fn get_bytes(&self) -> &[u8] {
 		todo!()
 	}
 }
 
-impl PrimitiveTypeTrait for Buffer {
+impl PrimitiveType for Buffer {
 	fn memory(&self) -> &[u8] {
 		self.as_slice()
 	}
 
-	fn convert_to(&self, ty: StackItemType) -> StackItem {
+	fn convert_to(&self, ty: StackItemType) -> Box<dyn StackItem> {
 		match ty {
 			StackItemType::Integer => {
 				if self.bytes.len() > i32::MAX as usize {
@@ -187,20 +209,20 @@ impl From<&[u8]> for Buffer {
 	}
 }
 
-impl Into<StackItem> for Buffer {
-	fn into(self) -> StackItem {
+impl Into<dyn StackItem> for Buffer {
+	fn into(self) -> Box<dyn StackItem> {
 		StackItem::VMBuffer(self)
 	}
 }
 
-impl Into<PrimitiveType> for Buffer {
-	fn into(self) -> PrimitiveType {
+impl Into<dyn PrimitiveType> for Buffer {
+	fn into(self) -> Box<dyn PrimitiveType> {
 		PrimitiveType::VMBuffer(self)
 	}
 }
 
-impl From<PrimitiveType> for Buffer {
-	fn from(ty: PrimitiveType) -> Self {
+impl From<dyn PrimitiveType> for Buffer {
+	fn from(ty: &dyn PrimitiveType) -> Self {
 		match ty {
 			PrimitiveType::VMBuffer(b) => b,
 			_ => panic!("Invalid cast"),

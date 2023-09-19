@@ -1,7 +1,7 @@
 use crate::{instruction::Instruction, op_code::OpCode, stack_item_type::StackItemType};
 use std::{collections::HashMap, convert::TryFrom, ops::Index};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Script {
 	value: Vec<u8>,
 	strict_mode: bool,
@@ -17,7 +17,7 @@ impl Script {
 		OpCode::try_from(self.value[index]).unwrap()
 	}
 
-	fn new(bytes: Vec<u8>, strict_mode: bool) -> Result<Self, ScriptError> {
+	pub fn new(bytes: Vec<u8>, strict_mode: bool) -> Result<Self, ScriptError> {
 		let mut script = Self { value: bytes, strict_mode, instructions: HashMap::new() };
 
 		if strict_mode {
@@ -27,7 +27,7 @@ impl Script {
 		Ok(script)
 	}
 
-	fn validate(&mut self) -> Result<(), ScriptError> {
+	pub fn validate(&mut self) -> Result<(), ScriptError> {
 		let mut ip = 0;
 		while ip < self.len() {
 			let instruction = self.get_instruction(ip).unwrap();
@@ -35,7 +35,7 @@ impl Script {
 		}
 
 		for (ip, instruction) in &self.instructions {
-			match instruction.op_code {
+			match instruction.opcode {
 				OpCode::Jmp
 				| OpCode::JmpIf
 				| OpCode::JmpIfNot
@@ -47,8 +47,8 @@ impl Script {
 				| OpCode::JmpLe
 				| OpCode::Call
 				| OpCode::EndTry =>
-					if !self.instructions.contains_key(&(ip + instruction.token_i8)) {
-						panic!("ip: {}, opcode: {:?}", ip, instruction.op_code);
+					if !self.instructions.contains_key(&(ip + instruction.token_i8())) {
+						panic!("ip: {}, opcode: {:?}", ip, instruction.opcode);
 					},
 				OpCode::PushA
 				| OpCode::JmpL
@@ -62,23 +62,23 @@ impl Script {
 				| OpCode::JmpLeL
 				| OpCode::CallL
 				| OpCode::EndTryL =>
-					if !self.instructions.contains_key(&(ip + instruction.token_i32)) {
-						panic!("ip: {}, opcode: {:?}", ip, instruction.op_code);
+					if !self.instructions.contains_key(&(ip + instruction.token_i32())) {
+						panic!("ip: {}, opcode: {:?}", ip, instruction.opcode);
 					},
 				OpCode::Try => {
-					if !self.instructions.contains_key(&(ip + instruction.token_i8)) {
-						panic!("ip: {}, opcode: {:?}", ip, instruction.op_code);
+					if !self.instructions.contains_key(&(ip + instruction.token_i8())) {
+						panic!("ip: {}, opcode: {:?}", ip, instruction.opcode);
 					}
-					if !self.instructions.contains_key(&(ip + instruction.token_i8_1)) {
-						panic!("ip: {}, opcode: {:?}", ip, instruction.op_code);
+					if !self.instructions.contains_key(&(ip + instruction.token_i8_1())) {
+						panic!("ip: {}, opcode: {:?}", ip, instruction.opcode);
 					}
 				},
 				OpCode::TryL => {
-					if !self.instructions.contains_key(&(ip + instruction.token_i32)) {
-						panic!("ip: {}, opcode: {:?}", ip, instruction.op_code);
+					if !self.instructions.contains_key(&(ip + instruction.token_i32())) {
+						panic!("ip: {}, opcode: {:?}", ip, instruction.opcode);
 					}
-					if !self.instructions.contains_key(&(ip + instruction.token_i32_1)) {
-						panic!("ip: {}, opcode: {:?}", ip, instruction.op_code);
+					if !self.instructions.contains_key(&(ip + instruction.token_i32_1())) {
+						panic!("ip: {}, opcode: {:?}", ip, instruction.opcode);
 					}
 				},
 				OpCode::NewArrayT | OpCode::IsType | OpCode::Convert => {
@@ -99,13 +99,13 @@ impl Script {
 		Ok(())
 	}
 
-	fn get_instruction(&mut self, ip: usize) -> Result<&Instruction, ScriptError> {
+	pub fn get_instruction(&mut self, ip: usize) -> Result<&Instruction, ScriptError> {
 		if !self.instructions.contains_key(&ip) {
 			if self.strict_mode {
 				return Err(ScriptError::InvalidInstrPointer(ip))
 			}
 
-			let instr = Instruction::parse(&self.bytes, ip)?;
+			let instr = Instruction::parse(&self.value, ip)?;
 			self.instructions.insert(ip, instr);
 		}
 

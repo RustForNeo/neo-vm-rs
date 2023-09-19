@@ -1,78 +1,126 @@
-use crate::{reference_counter::ReferenceCounter, stack_item::StackItem};
-use std::{cell::RefCell, collections::VecDeque, convert::TryInto, rc::Rc};
+use std::cell::RefCell;
+use std::collections::VecDeque;
+use std::rc::Rc;
+use crate::reference_counter::ReferenceCounter;
+use crate::stack_item::StackItem;
 
-/// Represents the evaluation stack in the VM.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct EvaluationStack {
-	stack: VecDeque<Rc<RefCell<dyn StackItem>>>,
+	inner_list: VecDeque<Rc<RefCell<dyn StackItem>>>,
 	reference_counter: Rc<RefCell<ReferenceCounter>>,
 }
 
 impl EvaluationStack {
-	pub fn new(reference_counter: Rc<RefCell<ReferenceCounter>>) -> Self {
-		Self { stack: VecDeque::new(), reference_counter }
-	}
 
-	/// Gets the number of items on the stack.
-	pub fn len(&self) -> usize {
-		self.stack.len()
+	pub fn new(reference_counter: Rc<RefCell<ReferenceCounter>>) -> Self {
+		Self {
+			inner_list: VecDeque::new(),
+			reference_counter,
+		}
 	}
 
 	pub fn clear(&mut self) {
-		self.stack.clear();
-	}
-
-	pub fn copy_to(&self, other: &mut EvaluationStack, count: Option<usize>) {
-		let count = count.unwrap_or(self.len());
-		if count == 0 {
-			return
+		for item in &self.inner_list {
+			self.reference_counter.remove_stack_reference(item);
 		}
-		other.stack.extend(self.stack.iter().take(count));
+		self.inner_list.clear();
 	}
 
-	/// Returns the item at the specified index from the top of the stack without removing it.
-	pub fn peek(&self, index: i64) -> Option<Rc<RefCell<dyn StackItem>>> {
-		let index = index.try_into().ok()?;
-		Some(self.stack.get(self.len().checked_sub(index + 1)?).unwrap().clone())
+	pub fn copy_to(&self, stack: &mut EvaluationStack, count: i32) {
+		if count < -1 || count as usize > self.inner_list.len() {
+			panic!("Argument out of range");
+		}
+		if count == 0 {
+			return;
+		}
+		if count == -1 || count as usize == self.inner_list.len() {
+			stack.inner_list.extend(&self.inner_list);
+		} else {
+			let start = self.inner_list.len() - count as usize;
+			stack.inner_list.extend(&self.inner_list[start..]);
+		}
 	}
 
-	/// Pushes an item onto the top of the stack.
+	pub fn insert(&mut self, index: usize, item: Rc<RefCell<dyn StackItem>>) {
+		if index > self.inner_list.len() {
+			panic!("Insert out of bounds");
+		}
+		self.inner_list.insert(self.inner_list.len() - index, item);
+		self.reference_counter.add_stack_reference(&item);
+	}
+
+	pub fn move_to(&mut self, stack: &mut EvaluationStack, count: i32) {
+		if count == 0 {
+			return;
+		}
+		self.copy_to(stack, count);
+		if count == -1 || count as usize == self.inner_list.len() {
+			self.inner_list.clear();
+		} else {
+			let end = self.inner_list.len() - count as usize;
+			self.inner_list.drain(end..);
+		}
+	}
+
+	pub fn peek(&self, index: i32) -> Rc<RefCell<dyn StackItem>> {
+		let index = index as isize;
+		if index >= self.inner_list.len() as isize {
+			panic!("Peek out of bounds");
+		}
+		if index < 0 {
+			let index = self.inner_list.len() as isize + index;
+			if index < 0 {
+				panic!("Peek out of bounds");
+			}
+		}
+		self.inner_list.get((self.inner_list.len() as isize - index - 1) as usize).unwrap().clone()
+	}
+
 	pub fn push(&mut self, item: Rc<RefCell<dyn StackItem>>) {
-		self.stack.push_back(item);
+		self.inner_list.push_back(item);
+		self.reference_counter.add_stack_reference(&item);
 	}
 
-	pub fn reverse(&mut self, n: usize) {
-		if n > self.len() {
-			panic!("n out of bounds");
+	pub fn reverse(&mut self, n: i32) {
+		let n = n as usize;
+		if n < 0 || n > self.inner_list.len() {
+			panic!("Argument out of range");
 		}
 		if n <= 1 {
-			return
+			return;
 		}
-		self.stack.make_contiguous().rotate_right(n);
+		let end = self.inner_list.len() - n;
+		self.inner_list.make_contiguous().reverse();
 	}
 
-	/// Removes and returns the item at the top of the stack.
-	pub fn pop(&mut self) -> Option<Rc<RefCell<dyn StackItem>>> {
-		self.stack.pop_back()
+	pub fn pop(&mut self) -> Rc<RefCell<dyn StackItem>> {
+		self.remove(0)
 	}
 
-	/// Removes and returns the item at the top of the stack and convert it to the specified type.
-	pub fn pop_as<T: TryInto<dyn StackItem> + Copy>(&mut self) -> Option<T> {
-		self.stack.pop_back().map(|x| x.try_into().ok())
+	pub fn pop_typed<T: StackItem>(&mut self) -> T {
+		self.remove::<T>(0)
 	}
 
-	pub fn remove<T: TryInto<dyn StackItem> + Copy>(&mut self, index: i64) -> Option<T> {
-		let index = index.try_into().ok()?;
-		let index = self.len().checked_sub(index + 1)?;
-		self.stack
-			.get_mut(index)
-			.map(|x| (*x).try_into().ok())
-			.map(|x| {
-				x.map(|y| {
-					self.stack.remove(index);
-					y
-				})
-			})?
-			.flatten()
+	pub fn remove<T: StackItem>(&mut self, index: i32) -> T {
+		let index = index as isize;
+		if index >= self.inner_list.len() as isize {
+			panic!("Argument out of range");
+		}
+		if index < 0 {
+			let index = self.inner_list.len() as isize + index;
+			if index < 0 {
+				panic!("Argument out of range");
+			}
+		}
+		let index = self.inner_list.len() as isize - index - 1;
+		let item = self.inner_list.remove(index as usize).unwrap();
+		if !item.is::<T>() {
+			panic!("Invalid cast");
+		}
+		self.reference_counter.remove_stack_reference(&item);
+		item.try_into().unwrap()
+	}
+
+	pub fn size(&self) -> usize {
+		self.inner_list.len()
 	}
 }

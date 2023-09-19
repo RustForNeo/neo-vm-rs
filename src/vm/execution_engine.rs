@@ -20,7 +20,7 @@ use crate::{
 	vm_state::VMState,
 };
 use num_bigint::{BigInt, Sign};
-use num_traits::{Signed, ToPrimitive, Zero};
+use num_traits::{FromBytes, Signed, ToPrimitive, Zero};
 use std::{
 	cell::{Ref, RefCell},
 	convert::TryInto,
@@ -28,6 +28,9 @@ use std::{
 	ops::Neg,
 	rc::Rc,
 };
+use serde::Serialize;
+use crate::primitive_types::boolean::Boolean;
+use crate::primitive_types::integer::Integer;
 use crate::stack_item::StackItem;
 
 /// Represents the VM used to execute the script.
@@ -122,9 +125,9 @@ impl ExecutionEngine {
 		if self.invocation_stack.is_empty() {
 			self.state = VMState::Halt;
 		} else {
-			let context = self.current_context.as_ref().unwrap().borrow();
+			let context = self.current_context?.borrow();
 
-			let instruction = context.current_instruction.unwrap_or(Instruction::RET);
+			let instruction = context.current_instruction().unwrap_or(Instruction::RET);
 
 			self.pre_execute_instruction(instruction);
 
@@ -142,33 +145,31 @@ impl ExecutionEngine {
 		}
 	}
 
-	fn pop(&mut self) -> Rc<RefCell<StackItem>> {
+	fn pop(&mut self) -> Rc<RefCell<dyn StackItem>> {
 		self.current_context
 			.unwrap()
 			.get_mut()
-			.shared_states
-			.evaluation_stack
+			.evaluation_stack()
+			.get_mut()
 			.pop()
-			.unwrap()
 	}
 
-	fn push(&mut self, item: Rc<RefCell<StackItem>>) {
+	fn push(&mut self, item: Rc<RefCell<dyn StackItem>>) {
 		self.current_context
 			.unwrap()
 			.get_mut()
-			.shared_states
-			.evaluation_stack
+			.evaluation_stack()
+			.get_mut()
 			.push(item);
 	}
 
-	fn peek(&self, index: usize) -> Rc<RefCell<StackItem>> {
+	fn peek(&self, index: usize) -> Rc<RefCell<dyn StackItem>> {
 		self.current_context
 			.unwrap()
 			.borrow()
-			.shared_states
-			.evaluation_stack
+			.evaluation_stack()
 			.get_mut()
-			.peek(index as i64)
+			.peek(index as i32)
 			.unwrap()
 	}
 
@@ -180,15 +181,15 @@ impl ExecutionEngine {
 			| OpCode::PushInt32
 			| OpCode::PushInt64
 			| OpCode::PushInt128
-			| OpCode::PushInt256 => self.push(StackItem::from(VMInteger::from(instr.operand)).into()),
-			OpCode::PushTrue => self.push(StackItem::from(true).into()),
-			OpCode::PushFalse => self.push(StackItem::from(false).into()),
+			| OpCode::PushInt256 => self.push(Rc::new(RefCell::new(Integer::new(&BigInt::from_be_bytes(instr.operand.as_slice()))))),
+			OpCode::PushTrue => self.push(Rc::new(RefCell::new(Boolean::new(true)))),
+			OpCode::PushFalse => self.push(Rc::new(RefCell::new(Boolean::new(false)))),
 			OpCode::PushA => {
-				let position = (self.current_context.unwrap().instruction_pointer as i32)
+				let position = (self.current_context?.get_mut().instruction_pointer as i32)
 					.checked_add(instr.token_i32())
 					.unwrap();
 				if position < 0
-					|| position > self.current_context.unwrap().shared_states.script.len() as i32
+					|| position > self.current_context?.get_mut().script().len() as i32
 				{
 					// return Err(VMException::InvalidOpcode("Bad pointer address: {position}");
 					return Err(VMException::new(Error::new("Bad pointer address")))
@@ -196,7 +197,7 @@ impl ExecutionEngine {
 
 				self.push(
 					StackItem::VMPointer(Pointer::new(
-						self.current_context.unwrap().shared_states.script,
+						&self.current_context?.get_mut().script(),
 						position as usize,
 					))
 					.into(),
@@ -331,18 +332,18 @@ impl ExecutionEngine {
 				}
 			},
 			OpCode::Call => self.execute_call(
-				(self.current_context.unwrap().instruction_pointer + instr.token_i8()) as i32,
+				(self.current_context?.get_mut().instruction_pointer + instr.token_i8()) as i32,
 			),
 			OpCode::CallL => self
-				.execute_call(self.current_context.unwrap().InstructionPointer + instr.token_i32()),
+				.execute_call((self.current_context?.get_mut().instruction_pointer + instr.token_i32()) as i32),
 			OpCode::CallA => {
 				let x: Pointer = self.pop().into();
-				if x.Script != self.current_context.unwrap().Script {
+				if x.script() != self.current_context?.get_mut().script() {
 					return Err(VMException::InvalidOpcode(
 						"Pointers can't be shared between scripts".parse().unwrap(),
 					))
 				}
-				self.execute_call(x.Position)
+				self.execute_call(x.position() as i32)
 			},
 			OpCode::CallT => self.load_token(instr.token_u16()),
 			OpCode::Abort =>
@@ -377,12 +378,12 @@ impl ExecutionEngine {
 				self.execute_end_try(end_offset as usize)
 			},
 			OpCode::EndFinally => {
-				if self.current_context.unwrap().try_stack.is_none() {
+				if self.current_context?.get_mut().try_stack.is_none() {
 					return Err(VMException::InvalidOpcode(
 						"The corresponding TRY block cannot be found.".parse().unwrap(),
 					))
 				}
-				let current_try = match self.current_context.unwrap().try_stack {
+				let current_try = match self.current_context?.get_mut().try_stack {
 					Some(ref mut x) => x,
 					None =>
 						return Err(VMException::InvalidOpcode(
@@ -391,7 +392,7 @@ impl ExecutionEngine {
 				};
 
 				if self.uncaught_exception.is_none() {
-					self.current_context.unwrap().InstructionPointer = current_try.EndPointer;
+					self.current_context?.get_mut().instruction_pointer = current_try.get_mut().EndPointer;
 				} else {
 					self.handle_exception();
 				}
@@ -399,7 +400,7 @@ impl ExecutionEngine {
 				self.is_jumping = true
 			},
 			OpCode::Ret => {
-				let context_pop = self.invocation_stack.pop().unwrap();
+				let mut context_pop = self.invocation_stack.pop().unwrap();
 				let stack_eval = match self.invocation_stack.len() == 0 {
 					true => self.result_stack.clone(),
 					false => self
@@ -407,21 +408,20 @@ impl ExecutionEngine {
 						.last()
 						.unwrap()
 						.borrow()
-						.shared_states
-						.evaluation_stack
+						.evaluation_stack()
 						.clone(),
 				};
 				// }
 				// ? self.result_stack.clone() : self.invocation_stack.self.peek().EvaluationStack;
-				if context_pop.borrow().shared_states.evaluation_stack != stack_eval {
+				if context_pop.borrow().evaluation_stack() != stack_eval {
 					if context_pop.borrow().rv_count >= 0
-						&& context_pop.EvaluationStack.Count != context_pop.RVCount
+						&& context_pop.get_mut().evaluation_stack().get_mut().len() != context_pop.borrow().rv_count as usize
 					{
 						return Err(VMException::InvalidOpcode(
 							"RVCount doesn't match with EvaluationStack".parse().unwrap(),
 						))
 					}
-					context_pop.EvaluationStack.CopyTo(stack_eval);
+					context_pop.get_mut().evaluation_stack().CopyTo(stack_eval);
 				}
 				if self.invocation_stack.len() == 0 {
 					self.state = VMState::Halt;
@@ -434,9 +434,9 @@ impl ExecutionEngine {
 			OpCode::Syscall => self.on_syscall(instr.token_u32()),
 
 			// Stack ops
-			OpCode::Depth => self.push(self.current_context.unwrap().evaluation_stack.Count),
+			OpCode::Depth => self.push(self.current_context?.get_mut().evaluation_stack().borrow().len()),
 			OpCode::Drop => self.pop(),
-			OpCode::Nip => self.current_context.unwrap().shared_states.evaluation_stack.remove(1),
+			OpCode::Nip => self.current_context.unwrap().evaluation_stack().remove(1),
 			OpCode::Xdrop => {
 				let n = self.pop().get_integer().to_i32().unwrap();
 				if n < 0 {
@@ -446,9 +446,9 @@ impl ExecutionEngine {
 							.unwrap(),
 					))
 				}
-				self.current_context.unwrap().shared_states.evaluation_stack.remove(n as i64)
+				self.current_context.unwrap().evaluation_stack().remove(n as i64)
 			},
-			OpCode::Clear => self.current_context.unwrap().shared_states.evaluation_stack.Clear(),
+			OpCode::Clear => self.current_context.unwrap().evaluation_stack().Clear(),
 			OpCode::Dup => self.push(self.peek(0).clone()),
 			OpCode::Over => self.push(self.peek(1).clone()),
 			OpCode::Pick => {
@@ -464,18 +464,18 @@ impl ExecutionEngine {
 				// break;
 			},
 			OpCode::Tuck => self
-				.current_context
-				.unwrap()
-				.shared_states
-				.evaluation_stack
+				.current_context?
+				.get_mut()
+				.evaluation_stack()
+				.get_mut()
 				.Insert(2, self.peek(0)),
 			OpCode::Swap => {
-				let x = self.current_context.unwrap().shared_states.evaluation_stack.remove(1);
+				let x = self.current_context.unwrap().evaluation_stack().remove(1);
 				self.push(StackItem::from(x).into())
 				// break;
 			},
 			OpCode::Rot => {
-				let x = self.current_context.unwrap().shared_states.evaluation_stack.remove(2);
+				let x = self.current_context.unwrap().evaluation_stack().remove(2);
 				self.push(StackItem::from(x).into())
 			},
 			OpCode::Roll => {
@@ -490,19 +490,19 @@ impl ExecutionEngine {
 				if n == 0 {
 					return Ok(VMState::None)
 				}
-				let x = self.current_context.unwrap().shared_states.evaluation_stack.remove(n);
+				let x = self.current_context?.get_mut().evaluation_stack().remove(n);
 				self.push(StackItem::from(x).into())
 			},
-			OpCode::Reverse3 => self.current_context.unwrap().evaluation_stack.Reverse(3),
-			OpCode::Reverse4 => self.current_context.unwrap().evaluation_stack.Reverse(4),
+			OpCode::Reverse3 => self.current_context?.get_mut().evaluation_stack().Reverse(3),
+			OpCode::Reverse4 => self.current_context?.get_mut().evaluation_stack().Reverse(4),
 			OpCode::ReverseN => {
 				let n = self.pop().get_integer();
-				self.current_context.unwrap().evaluation_stack.Reverse(n)
+				self.current_context?.get_mut().evaluation_stack().Reverse(n)
 			},
 
 			//Slot
 			OpCode::InitSSLot => {
-				if self.current_context.unwrap().shared_states.static_fields.is_some() {
+				if self.current_context?.get_mut().static_fields().is_some() {
 					return Err(VMException::InvalidOpcode(
 						"{instr.OpCode} cannot be executed twice.".parse().unwrap(),
 					))
@@ -514,14 +514,14 @@ impl ExecutionEngine {
 							.unwrap(),
 					))
 				}
-				self.current_context.unwrap().shared_states.static_fields = Some(
-					Slot::new_with_count(instr.token_u8() as i32, self.reference_counter.clone()),
+				self.current_context?.get_mut().set_fields() = Some(
+					&Slot::new_with_count(instr.token_u8() as i32, self.reference_counter.clone()),
 				)
 				// break;
 			},
 			OpCode::InitSlot => {
-				if self.current_context.unwrap().local_variables.is_some()
-					|| self.current_context.unwrap().arguments.is_some()
+				if self.current_context?.get_mut().local_variables.is_some()
+					|| self.current_context?.get_mut().arguments.is_some()
 				{
 					return Err(VMException::InvalidOpcode(
 						"{instr.OpCode} cannot be executed twice.".parse().unwrap(),
@@ -535,7 +535,7 @@ impl ExecutionEngine {
 					))
 				}
 				if instr.token_u8() > 0 {
-					self.current_context.unwrap().local_variables = Some(Slot::new_with_count(
+					self.current_context?.get_mut().local_variables = Some(Slot::new_with_count(
 						instr.token_u8() as i32,
 						self.reference_counter.clone(),
 					));
@@ -553,7 +553,7 @@ impl ExecutionEngine {
 						items[i] = self.pop();
 					}
 
-					self.current_context.unwrap().arguments =
+					self.current_context?.get_mut().arguments =
 						Some(Slot::new(items, self.reference_counter.clone()))
 				}
 			},
@@ -564,11 +564,11 @@ impl ExecutionEngine {
 			| OpCode::LdSFLd4
 			| OpCode::LdSFLd5
 			| OpCode::LdSFLd6 => self.execute_load_from_slot(
-				&mut self.current_context.unwrap().shared_states.static_fields.unwrap(),
-				instr.OpCode - OpCode::LdSFLd0,
+				&mut self.current_context?.get_mut().fields().unwrap(),
+				instr.opcode - OpCode::LdSFLd0,
 			),
 			OpCode::LdSFLd => self.execute_load_from_slot(
-				&mut self.current_context.unwrap().shared_states.static_fields.unwrap(),
+				&mut self.current_context?.get_mut().fields().unwrap(),
 				instr.token_u8() as usize,
 			),
 			OpCode::StSFLd0
@@ -578,11 +578,11 @@ impl ExecutionEngine {
 			| OpCode::StSFLd4
 			| OpCode::StSFLd5
 			| OpCode::StSFLd6 => self.execute_store_to_slot(
-				&mut self.current_context.unwrap().shared_states.static_fields,
-				instr.OpCode - OpCode::StSFLd0,
+				&mut self.current_context?.get_mut().fields()?,
+				instr.opcode - OpCode::StSFLd0,
 			),
 			OpCode::StSFLd => self.execute_store_to_slot(
-				&mut self.current_context.unwrap().shared_states.static_fields,
+				&mut self.current_context?.get_mut().fields()?,
 				instr.token_u8() as usize,
 			),
 			OpCode::LdLoc0
@@ -592,11 +592,11 @@ impl ExecutionEngine {
 			| OpCode::LdLoc4
 			| OpCode::LdLoc5
 			| OpCode::LdLoc6 => self.execute_load_from_slot(
-				self.current_context.unwrap().shared_states.local_variables,
-				instr.OpCode - OpCode::LdLoc0,
+				& mut self.current_context?.get_mut().local_variables?,
+				instr.opcode - OpCode::LdLoc0,
 			),
 			OpCode::LdLoc => self.execute_load_from_slot(
-				self.current_context.unwrap().shared_states.local_variables,
+				&mut self.current_context?.get_mut().local_variables?,
 				instr.token_u8() as usize,
 			),
 			OpCode::StLoc0
@@ -606,11 +606,11 @@ impl ExecutionEngine {
 			| OpCode::StLoc4
 			| OpCode::StLoc5
 			| OpCode::StLoc6 => self.execute_store_to_slot(
-				self.current_context.unwrap().shared_states.local_variables,
-				instr.OpCode - OpCode::StLoc0,
+				&mut self.current_context?.get_mut().local_variables?,
+				instr.opcode - OpCode::StLoc0,
 			),
 			OpCode::StLoc => self.execute_store_to_slot(
-				self.current_context.unwrap().shared_states.local_variables,
+				&mut self.current_context?.get_mut().local_variables?,
 				instr.token_u8() as usize,
 			),
 			OpCode::LdArg0
@@ -620,11 +620,11 @@ impl ExecutionEngine {
 			| OpCode::LdArg4
 			| OpCode::LdArg5
 			| OpCode::LdArg6 => self.execute_load_from_slot(
-				&mut self.current_context.unwrap().arguments.unwrap(),
-				instr.OpCode - OpCode::LdArg0,
+				&mut self.current_context?.get_mut().arguments.unwrap(),
+				instr.opcode - OpCode::LdArg0,
 			),
 			OpCode::LdArg => self.execute_load_from_slot(
-				&mut self.current_context.unwrap().arguments.unwrap(),
+				&mut self.current_context?.get_mut().arguments.unwrap(),
 				instr.token_u8() as usize,
 			),
 			OpCode::StArg0
@@ -634,11 +634,11 @@ impl ExecutionEngine {
 			| OpCode::StArg4
 			| OpCode::StArg5
 			| OpCode::StArg6 => self.execute_store_to_slot(
-				&mut self.current_context.unwrap().arguments,
-				instr.OpCode - OpCode::StArg0,
+				&mut self.current_context?.get_mut().arguments?,
+				instr.opcode - OpCode::StArg0,
 			),
 			OpCode::StArg => self.execute_store_to_slot(
-				&mut self.current_context.unwrap().arguments,
+				&mut self.current_context?.get_mut().arguments?,
 				instr.token_u8() as usize,
 			),
 
@@ -661,25 +661,25 @@ impl ExecutionEngine {
 						"The value {si} is out of range.".parse().unwrap(),
 					))
 				}
-				let src = self.pop().get_slice();
+				let src = self.pop().get_mut().get_slice();
 				if si.checked_add(count).unwrap() > src.len() as i64 {
 					return Err(VMException::InvalidOpcode(
 						"The value {count} is out of range.".parse().unwrap(),
 					))
 				}
-				let di = self.pop().get_integer().to_i64().unwrap();
-				if (di < 0) {
+				let di = self.pop().get_mut().get_integer().to_i64().unwrap();
+				if di < 0 {
 					return Err(VMException::InvalidOpcode(
 						"The value {di} is out of range.".parse().unwrap(),
 					))
 				}
 				let dst: Buffer = self.pop().into();
-				if di.checked_add(count) > dst.Size {
+				if di.checked_add(count)? > dst.size() as i64 {
 					return Err(VMException::InvalidOpcode(
 						"The value {count} is out of range.".parse().unwrap(),
 					))
 				}
-				src.Slice(si, count).CopyTo(dst.InnerBuffer.Span[di..])
+				src.Slice(si, count).CopyTo(dst.get_slice()[di..])
 			},
 			OpCode::Cat => {
 				let x2 = self.pop().GetSpan();
@@ -687,8 +687,8 @@ impl ExecutionEngine {
 				let length = x1.Length + x2.Length;
 				self.limits.assert_max_item_size(length);
 				let result = Buffer::new(length); //, false);
-				x1.CopyTo(result.InnerBuffer.Span);
-				x2.CopyTo(result.InnerBuffer.Span[x1.Length..]);
+				x1.CopyTo(result.get_slice());
+				x2.CopyTo(result.get_slice()[x1.Length..]);
 				self.push(StackItem::from(result).into())
 				// break;
 			},
@@ -712,7 +712,7 @@ impl ExecutionEngine {
 					))
 				}
 				let result = Buffer::new(count); //, false);
-				x.Slice(index, count).CopyTo(result.InnerBuffer.Span);
+				x.Slice(index, count).CopyTo(result.get_slice());
 				self.push(StackItem::from(result).into())
 			},
 			OpCode::Left => {
@@ -729,7 +729,7 @@ impl ExecutionEngine {
 					))
 				}
 				let result = Buffer::new(count as usize); //, false);
-				x[..count].CopyTo(result.InnerBuffer.Span);
+				x[..count].CopyTo(result.get_slice());
 				self.push(StackItem::from(result).into())
 			},
 			OpCode::Right => {
@@ -910,9 +910,9 @@ impl ExecutionEngine {
 				}
 			},
 			OpCode::Le => {
-				let x2 = self.pop();
-				let x1 = self.pop();
-				if x1.get_item_type() == StackItemType::Any
+				let x2 = self.pop().borrow();
+				let x1 = self.pop().borrow();
+				if x1.get_type() == StackItemType::Any
 					|| x2.get_item_type() == StackItemType::Any
 				{
 					self.push(StackItem::from(false).into())
@@ -922,9 +922,9 @@ impl ExecutionEngine {
 				// break;
 			},
 			OpCode::Gt => {
-				let x2 = self.pop();
-				let x1 = self.pop();
-				if x1.get_item_type() == StackItemType::Any
+				let x2 = self.pop().borrow();
+				let x1 = self.pop().borrow();
+				if x1.get_type() == StackItemType::Any
 					|| x2.get_item_type() == StackItemType::Any
 				{
 					self.push(StackItem::from(false).into())
@@ -966,14 +966,14 @@ impl ExecutionEngine {
 			// Compound-type
 			OpCode::PackMap => {
 				let size = self.pop().get_integer().to_usize().unwrap();
-				if size < 0 || size * 2 > self.current_context.unwrap().evaluation_stack.Count {
+				if size < 0 || size * 2 > self.current_context?.get_mut().evaluation_stack().borrow().size() {
 					return Err(VMException::InvalidOpcode(
 						"The value {size} is out of range.".parse().unwrap(),
 					))
 				}
 				let map = Map::new(Some(self.reference_counter.clone()));
 				for i in 0..size {
-					let key: PrimitiveType = self.pop().into();
+					let key: dyn PrimitiveType = self.pop().into();
 					let value = self.pop();
 					map[key] = value;
 				}
@@ -981,7 +981,7 @@ impl ExecutionEngine {
 			},
 			OpCode::PackStruct => {
 				let size = self.pop().get_integer().to_i64().unwrap();
-				if size < 0 || size > self.current_context.unwrap().evaluation_stack.Count {
+				if size < 0 || size > self.current_context?.get_mut().evaluation_stack().borrow().size() {
 					return Err(VMException::InvalidOpcode(
 						"The value {size} is out of range.".parse().unwrap(),
 					))
@@ -997,7 +997,7 @@ impl ExecutionEngine {
 			OpCode::Pack => {
 				let size = self.pop().get_integer().to_usize().unwrap();
 				if size < 0
-					|| size > self.current_context.unwrap().shared_states.evaluation_stack.len()
+					|| size > self.current_context.unwrap().evaluation_stack().len()
 				{
 					return Err(VMException::InvalidOpcode(
 						"The value {size} is out of range.".parse().unwrap(),
@@ -1011,12 +1011,12 @@ impl ExecutionEngine {
 				self.push(StackItem::from(array).into())
 			},
 			OpCode::Unpack => {
-				let compound: CompoundType = self.pop().into();
+				let compound: dyn CompoundType = self.pop().into();
 				match compound {
 					CompoundType::VMMap(map) =>
 						for (key, value) in map.values().rev() {
-							self.push((value as PrimitiveType).into().into());
-							self.push((key as StackItem).into());
+							self.push((value).into().into());
+							self.push((key).into());
 						},
 
 					// break;
@@ -1030,20 +1030,20 @@ impl ExecutionEngine {
 							"Invalid type for {instr.OpCode}: {compound.Type}".parse().unwrap(),
 						)),
 				}
-				self.push(StackItem::from(compound.Count).into())
+				self.push(StackItem::from(compound.count()).into())
 			},
 			OpCode::NewArray0 => self.push(
 				StackItem::from(Array::new(None, Some(self.reference_counter.clone()))).into(),
 			),
 			OpCode::NewArray | OpCode::NewArrayT => {
 				let n = self.pop().get_integer().to_i64().unwrap();
-				if n < 0 || n > self.limits.MaxStackSize {
+				if n < 0 || n > self.limits.max_stack_size {
 					return Err(VMException::InvalidOpcode(
 						"MaxStackSize exceed: {n}".parse().unwrap(),
 					))
 				}
-				let item: StackItem;
-				if instr.OpCode == OpCode::NewArrayT {
+				let item: dyn StackItem;
+				if instr.opcode == OpCode::NewArrayT {
 					let _type = instr.token_u8();
 					if !StackItemType::is_valid(_type) {
 						return Err(VMException::InvalidOpcode(
@@ -1104,7 +1104,7 @@ impl ExecutionEngine {
 				}
 			},
 			OpCode::HasKey => {
-				let key: Rc<RefCell<PrimitiveType>> = self.pop().into();
+				let key: Rc<RefCell<dyn PrimitiveType>> = self.pop().into();
 				let x = self.pop();
 				match x {
 					StackItem::VMMap(map) =>
@@ -1182,7 +1182,7 @@ impl ExecutionEngine {
 				self.push(StackItem::from(new_array).into())
 			},
 			OpCode::PickItem => {
-				let key: Rc<RefCell<PrimitiveType>> = self.pop().into();
+				let key: Rc<RefCell<dyn PrimitiveType>> = self.pop().into();
 				let x = self.pop();
 				match x {
 					StackItem::VMArray(array) => {
@@ -1260,7 +1260,7 @@ impl ExecutionEngine {
 					let s: Struct = value.into();
 					value = s.clone(&self.limits).try_into().unwrap();
 				}
-				let key: PrimitiveType = self.pop().into();
+				let key: dyn PrimitiveType = self.pop().into();
 				let x = self.pop();
 				match x {
 					VMArray(array) => {
@@ -1312,7 +1312,7 @@ impl ExecutionEngine {
 				}
 			},
 			OpCode::Remove => {
-				let key: Rc<RefCell<PrimitiveType>> = self.pop().into();
+				let key: Rc<RefCell<dyn PrimitiveType>> = self.pop().into();
 				let x = self.pop();
 				match x {
 					StackItem::VMArray(mut array) => {
@@ -1332,13 +1332,13 @@ impl ExecutionEngine {
 				}
 			},
 			OpCode::ClearItems => {
-				let x: CompoundType = self.pop().into();
+				let x: dyn CompoundType = self.pop().into();
 				x.Clear()
 			},
 			OpCode::PopItem => {
-				let mut x: Array = self.pop().into();
-				let index = x.Count - 1;
-				self.push(x[index]);
+				let mut x: Rc<RefCell<dyn CompoundType>> = self.pop();
+				let index = x.count() - 1;
+				self.push(x[index].clone());
 				x.remove_at(index)
 			},
 
@@ -1390,17 +1390,17 @@ impl ExecutionEngine {
 
 	fn execute_jump_offset(&mut self, offset: i32) {
 		self.execute_jump(
-			(self.current_context.unwrap().instr_pointer as i32)
+			(self.current_context?.borrow().instruction_pointer as i32)
 				.checked_add(offset)
 				.unwrap(),
 		)
 	}
 	fn execute_jump(&mut self, offset: i32) {
-		let new_ip = (self.current_context.unwrap().instr_pointer as i32 + offset) as usize;
-		if new_ip >= self.current_context.unwrap().script.0.len() {
+		let new_ip = (self.current_context?.borrow().instruction_pointer as i32 + offset) as usize;
+		if new_ip >= self.current_context?.borrow().script.0.len() {
 			return self.handle_error(Error::InvalidJump)
 		}
-		self.current_context.unwrap().instr_pointer = new_ip;
+		self.current_context?.borrow().instruction_pointer = new_ip;
 	}
 
 	fn handle_error(&mut self, err: Error) {
@@ -1425,10 +1425,10 @@ impl ExecutionEngine {
 		}
 
 		if let Some(current) = &mut self.current_context {
-			if current.borrow().shared_states.static_fields
-				!= context.borrow().shared_states.static_fields
+			if current.borrow().fields()
+				!= context.borrow().fields()
 			{
-				context.borrow().shared_states.static_fields.unwrap().clear_references();
+				context.borrow().fields()?.clear_references();
 			}
 		}
 		context.borrow().local_variables.unwrap().clear_references();
@@ -1472,7 +1472,7 @@ impl ExecutionEngine {
 	}
 
 	fn pre_execute_instruction(&mut self, instruction: Instruction) {
-		if self.reference_counter.borrow().count > self.limits.max_stack_size {
+		if self.reference_counter.borrow().count() > self.limits.max_stack_size {
 			panic!("Max stack size exceeded");
 		}
 
@@ -1488,7 +1488,7 @@ impl ExecutionEngine {
 	}
 
 	fn post_execute_instruction(&mut self, instruction: Instruction) {
-		let count = self.reference_counter.borrow().count;
+		let count = self.reference_counter.borrow().count();
 		if count > self.limits.max_stack_size {
 			panic!("Max stack size exceeded: {}", count);
 		}
@@ -1509,7 +1509,7 @@ impl ExecutionEngine {
 		// set instruction pointer to catch or finally
 		// pop contexts
 		if let Some(exception) = self.uncaught_exception.take() {
-			panic!("Unhandled exception: {:?}", exception);
+			panic!("Unhandled exception: {:?}", exception.borrow().get_slice());
 		}
 	}
 
@@ -1547,7 +1547,7 @@ impl ExecutionEngine {
 		self.is_jumping = true;
 	}
 
-	fn execute_throw(&mut self, exception: Rc<RefCell<StackItem>>) {
+	fn execute_throw(&mut self, exception: Rc<RefCell<dyn StackItem>>) {
 		self.uncaught_exception = Some(exception);
 		self.handle_exception();
 	}
@@ -1590,13 +1590,13 @@ impl ExecutionEngine {
 		}
 	}
 
-	fn execute_store_to_slot(&mut self, slot: &mut Option<Slot>, index: usize) {
+	fn execute_store_to_slot(&mut self, slot: &mut Slot, index: usize) {
 		if let Some(slot) = slot {
 			if index >= slot.len() {
 				panic!("Index out of range when storing to slot: {}", index);
 			}
 
-			let value = self.result_stack.pop();
+			let value = self.result_stack.get_mut().pop();
 			slot[index] = value;
 		} else {
 			panic!("Slot has not been initialized.");

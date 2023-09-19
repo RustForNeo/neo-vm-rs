@@ -1,16 +1,19 @@
 use std::{cell::RefCell, collections::HashMap, hash::Hash};
+use num_bigint::BigInt;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
-	stack_item::{ObjectReferenceEntry, StackItem, StackItem},
+	stack_item::{ObjectReferenceEntry, StackItem},
 	stack_item_type::StackItemType,
 	vm::script::Script,
 };
 use crate::compound_types::compound_type::CompoundType;
+use crate::execution_engine_limits::ExecutionEngineLimits;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Pointer {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	object_references: RefCell<Option<HashMap<dyn CompoundType, ObjectReferenceEntry>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
@@ -19,21 +22,50 @@ pub struct Pointer {
 }
 
 impl Pointer {
-	pub fn new(script: Script, position: usize) -> Self {
+	pub fn new(script: &Script, position: usize) -> Self {
 		Self {
 			stack_references: 0,
 			object_references: RefCell::new(None),
 			dfn: 0,
 			low_link: 0,
 			on_stack: false,
-			script,
+			script:script.clone(),
 			position,
 		}
+	}
+
+	pub fn script(&self) -> &Script {
+		&self.script
+	}
+
+	pub fn position(&self) -> usize {
+		self.position
+	}
+}
+
+impl PartialEq<Self> for Pointer {
+	fn eq(&self, other: &Self) -> bool {
+		todo!()
+	}
+}
+
+impl Serialize for Pointer {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+	}
+}
+
+impl Deserialize for Pointer {
+	fn deserialize<'de, D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+		todo!()
 	}
 }
 
 impl StackItem for Pointer {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
+	const TRUE: Self = Default::default();
+
+	const FALSE: Self = Default::default();
+
+	const NULL: Self = Default::default();
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -79,10 +111,6 @@ impl StackItem for Pointer {
 		todo!()
 	}
 
-	fn get_boolean(&self) -> bool {
-		true
-	}
-
 	fn get_slice(&self) -> &[u8] {
 		todo!()
 	}
@@ -90,8 +118,30 @@ impl StackItem for Pointer {
 	fn get_type(&self) -> StackItemType {
 		StackItemType::Pointer
 	}
+	fn get_boolean(&self) -> bool {
+		true
+	}
+	fn deep_copy(&self, asImmutable: bool) -> Box<dyn StackItem> {
+		todo!()
+	}
 
-	fn equals(&self, other: &Option<StackItem>) -> bool {
+	fn deep_copy_with_ref_map(&self, ref_map: &HashMap<&dyn StackItem, &dyn StackItem>, asImmutable: bool) -> Box<dyn StackItem> {
+		todo!()
+	}
+
+	fn equals(&self, other: &Option<dyn StackItem>) -> bool {
+		todo!()
+	}
+
+	fn equals_with_limits(&self, other: &dyn StackItem, limits: &ExecutionEngineLimits) -> bool {
+		todo!()
+	}
+
+	fn get_integer(&self) -> BigInt {
+		todo!()
+	}
+
+	fn get_bytes(&self) -> &[u8] {
 		todo!()
 	}
 }

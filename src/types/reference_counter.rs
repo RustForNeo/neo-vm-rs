@@ -1,3 +1,5 @@
+#![feature(linked_list_remove)]
+
 use crate::{
 	stack_item::{StackItem},
 };
@@ -40,7 +42,7 @@ impl ReferenceCounter {
 		}
 	}
 
-	fn need_track(&self, item: Rc<RefCell<StackItem>>) -> bool {
+	fn need_track(&self, item: Rc<RefCell<dyn StackItem>>) -> bool {
 		// Track compound types and buffers
 		if let StackItem::CompoundType(_) | StackItem::Buffer(_) = item {
 			true
@@ -89,7 +91,7 @@ impl ReferenceCounter {
 				.map(|components| components.push_back(HashSet::from([item.clone()])));
 		}
 
-		item.get_mut().stack_references += count;
+		item.get_mut().set_stack_references(item.borrow().stack_references() + count);
 		self.zero_referred.remove(&item);
 	}
 
@@ -106,6 +108,7 @@ impl ReferenceCounter {
 
 		self.tracked_items.insert(item.clone());
 	}
+
 
 	fn check_zero_referred(&mut self) -> usize {
 		if !self.zero_referred.is_empty() {
@@ -167,6 +170,7 @@ impl ReferenceCounter {
 
 					let node_to_remove = node.take().unwrap();
 					let pos = components.iter().position(|&x| &x == node_to_remove).unwrap();
+					// #![feature(linked_list_remove)]
 					components.remove(pos);
 				}
 			}
@@ -188,13 +192,13 @@ impl ReferenceCounter {
 
 		self.cached_components = None;
 
-		if let Some(refs) = &mut item.object_references {
+		if let Some(refs) = &mut item.object_references() {
 			if let Some(entry) = refs.get_mut(parent) {
 				entry.references -= 1;
 			}
 		}
 
-		if item.stack_references == 0 {
+		if item.stack_references() == 0 {
 			self.zero_referred.insert(item.clone());
 		}
 	}
@@ -211,5 +215,9 @@ impl ReferenceCounter {
 		if it.stack_references() == 0 {
 			self.zero_referred.insert(item.clone());
 		}
+	}
+
+	pub fn count(&self) -> usize {
+		self.references_count
 	}
 }

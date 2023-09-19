@@ -18,7 +18,7 @@ use crate::execution_engine_limits::ExecutionEngineLimits;
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Boolean {
 	stack_references: u32,
-	object_references: Rc<RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>>,
+	object_references: Rc<RefCell<Option<HashMap<dyn CompoundType, ObjectReferenceEntry>>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
