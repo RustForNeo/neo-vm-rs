@@ -15,11 +15,6 @@ use crate::{
 	primitive_types::{byte_string::ByteString, primitive_type::PrimitiveType},
 	reference_counter::ReferenceCounter,
 	slot::Slot,
-	stack_item::{
-		StackItem,
-		StackItem::{VMArray, VMInteger},
-		StackItemTrait,
-	},
 	stack_item_type::StackItemType,
 	vm::{script::Script, vm_exception::VMException},
 	vm_state::VMState,
@@ -33,6 +28,7 @@ use std::{
 	ops::Neg,
 	rc::Rc,
 };
+use crate::stack_item::StackItem;
 
 /// Represents the VM used to execute the script.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
@@ -56,7 +52,7 @@ pub struct ExecutionEngine {
 	pub result_stack: Rc<RefCell<EvaluationStack>>,
 
 	/// The VM object representing the uncaught exception.
-	pub uncaught_exception: Option<Rc<RefCell<StackItem>>>,
+	pub uncaught_exception: Option<Rc<RefCell<dyn StackItem>>>,
 
 	/// The current state of the VM.
 	pub state: VMState,

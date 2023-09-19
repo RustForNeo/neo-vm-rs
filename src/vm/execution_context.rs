@@ -67,23 +67,23 @@ impl ExecutionContext {
 			.unwrap()
 	}
 
-	pub fn peek(&self, index: usize) -> &StackItem {
+	pub fn peek(&self, index: usize) -> Rc<RefCell<dyn StackItem>> {
 		let idx = self.items.len() - index - 1;
 		&self.items[idx]
 	}
 
-	pub fn push(&mut self, item: StackItem) {
+	pub fn push(&mut self, item:Rc<RefCell<dyn StackItem>>) {
 		self.items.push(item);
 		self.reference_counter.add_stack_reference(&item);
 	}
 
-	pub fn pop(&mut self) -> StackItem {
+	pub fn pop(&mut self) -> Rc<RefCell<dyn StackItem>> {
 		let item = self.items.pop().expect("stack empty");
 		self.reference_counter.remove_stack_reference(&item);
 		item
 	}
 
-	pub fn remove(&mut self, index: usize) -> StackItem {
+	pub fn remove(&mut self, index: usize) -> Rc<RefCell<dyn StackItem>> {
 		let idx = self.items.len() - index - 1;
 		let item = self.items.remove(idx).expect("index out of bounds");
 		self.reference_counter.remove_stack_reference(&item);

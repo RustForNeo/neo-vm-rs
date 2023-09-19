@@ -1,5 +1,5 @@
 use crate::{
-	stack_item::{ObjectReferenceEntry, StackItem, StackItemTrait},
+	stack_item::{ObjectReferenceEntry, StackItem, StackItem},
 	stack_item_type::StackItemType,
 };
 use std::{
@@ -20,7 +20,7 @@ pub struct Null {
 	stack_references: u32,
 }
 
-impl StackItemTrait for Null {
+impl StackItem for Null {
 	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
 
 	fn dfn(&self) -> isize {

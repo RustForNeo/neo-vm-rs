@@ -5,29 +5,29 @@ use std::{
 	iter::FromIterator,
 };
 
-pub struct Tarjan {
-	stack_items: Vec<&'a StackItem>,
-	stack: VecDeque<&'a StackItem>,
-	components: Vec<HashSet<&'a StackItem>>,
+pub struct Tarjan<'a> {
+	stack_items: Vec<&'a dyn StackItem>,
+	stack: VecDeque<&'a mut dyn StackItem>,
+	components: Vec<HashSet<&'a mut dyn StackItem>>,
 	index: usize,
 }
 
 impl Tarjan {
-	pub fn new(stack_items: Vec<&StackItem>) -> Self {
+	pub fn new(stack_items: Vec<&dyn StackItem>) -> Self {
 		Self { stack_items, stack: VecDeque::new(), components: Vec::new(), index: 0 }
 	}
 
-	pub fn invoke(&mut self) -> Vec<HashSet<&StackItem>> {
-		for StackItem in &self.stack_items {
-			if StackItem.dfn < 0 {
-				self.strong_connect(StackItem);
+	pub fn invoke(&mut self) -> Vec<HashSet<&mut dyn StackItem>> {
+		for item in self.stack_items {
+			if item.dfn() < 0 {
+				self.strong_connect(item);
 			}
 		}
 
 		self.components.clone()
 	}
 
-	fn strong_connect(&mut self, item: &StackItem) {
+	fn strong_connect(&mut self, item: &dyn StackItem) {
 		let mut stack_item = StackItem::new(item.clone(), self.index);
 		self.stack.push_back(stack_item);
 
@@ -43,9 +43,9 @@ impl Tarjan {
 		if stack_item.lowlink == stack_item.index {
 			let mut component = HashSet::with_capacity(1);
 			while let Some(w) = self.stack.pop_back() {
-				w.on_stack = false;
-				component.insert(w.StackItem);
-				if w.StackItem == stack_item.StackItem {
+				w.set_on_stack(false);
+				component.insert(w);
+				if w == stack_item {
 					break
 				}
 			}

@@ -1,11 +1,11 @@
 use crate::{
 	execution_engine_limits::ExecutionEngineLimits,
 	reference_counter::ReferenceCounter,
-	stack_item::{ObjectReferenceEntry, StackItem, StackItemTrait},
+	stack_item::{ObjectReferenceEntry, StackItem},
 	stack_item_type::StackItemType,
 	types::compound_types::{
 		array::Array,
-		compound_type::{CompoundType, CompoundTypeTrait},
+		compound_type::{CompoundType},
 	},
 };
 use std::{
@@ -15,23 +15,25 @@ use std::{
 	hash::Hash,
 	rc::Rc,
 };
+use num_bigint::BigInt;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub struct Struct {
 	reference_counter: Option<Rc<RefCell<ReferenceCounter>>>,
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	object_references: RefCell<Option<HashMap<dyn CompoundType, ObjectReferenceEntry>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
-	array: Vec<Rc<RefCell<StackItem>>>,
+	array: Vec<Rc<RefCell<dyn StackItem>>>,
 	read_only: bool,
 }
 
 impl Struct {
 	/// Create a structure with the specified fields
 	pub fn new(
-		fields: Option<Vec<Rc<RefCell<StackItem>>>>,
+		fields: Option<Vec<Rc<RefCell<dyn StackItem>>>>,
 		reference_counter: Option<Rc<RefCell<ReferenceCounter>>>,
 	) -> Self {
 		Self {
@@ -51,12 +53,12 @@ impl Struct {
 	pub fn clone(&self, limits: &ExecutionEngineLimits) -> Self {
 		let mut result = Struct::new(None, self.reference_counter.clone());
 		let mut queue = VecDeque::new();
-		queue.push_back(&result);
-		queue.push_back(self);
+		queue.push_back(&mut result);
+		queue.push_back(&mut self.clone(limits));
 
 		let mut count = limits.max_stack_size - 1;
 		while !queue.is_empty() {
-			let a = queue.pop_front().unwrap();
+			let mut a = queue.pop_front().unwrap();
 			let b = queue.pop_front().unwrap();
 			for item in &b.array {
 				count -= 1;
@@ -64,15 +66,15 @@ impl Struct {
 				if count == 0 {
 					panic!("Beyond clone limits!");
 				}
-				match item {
-					StackItem::VMStruct(s) => {
+				match item.borrow().get_type() {
+					StackItemType::Struct => {
 						let mut sa = Struct::new(None, None);
-						a.fields.push(&sa);
-						queue.push_back(&sa);
-						queue.push_back(&s);
+						a.array.push(Rc::new(RefCell::new(sa)));
+						queue.push_back(&mut sa);
+						queue.push_back(&mut item.borrow());
 					},
 					_ => {
-						a.fields.push(item.clone());
+						a.array.push(item.clone());
 					},
 				}
 			}
@@ -103,11 +105,14 @@ impl Struct {
 		stack1.push_back(self);
 		stack2.push_back(other);
 
+		let mut count = limits.max_stack_size;
+		let mut maxComparableSize = limits.max_comparable_size;
+
 		while !stack1.is_empty() {
-			if limits.stack_size == 0 {
+			if count == 0 {
 				panic!("Too many struct items to compare");
 			}
-			limits.stack_size -= 1;
+			count -= 1;
 
 			let a = stack1.pop_front().unwrap();
 			let b = stack2.pop_front().unwrap();
@@ -140,18 +145,47 @@ impl Struct {
 					},
 			}
 
-			if limits.comparable_size == 0 {
+			if maxComparableSize == 0 {
 				panic!("The operand exceeds the maximum comparable size");
 			}
-			limits.comparable_size -= 1;
+			maxComparableSize -= 1;
 		}
 
 		true
 	}
 }
 
-impl StackItemTrait for Struct {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
+impl Clone for Struct {
+	fn clone(&self) -> Self {
+		todo!()
+	}
+}
+
+impl PartialEq<Self> for Struct {
+	fn eq(&self, other: &Self) -> bool {
+
+	}
+}
+
+impl Serialize for Struct {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+		serializer.serialize_bytes(self.array.as_slice())
+	}
+}
+
+impl Deserialize for Struct {
+	fn deserialize<'de, D>(, deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+		let bytes = Vec::<dyn StackItem>::deserialize(deserializer)?;
+		Ok(Struct::new(Some(Rc::new(RefCell::new(bytes))), None);
+	}
+}
+
+impl StackItem for Struct {
+	const TRUE: Self = Default::default();
+
+	const FALSE: Self = Default::default();
+
+	const NULL: Self = Default::default();
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -197,12 +231,8 @@ impl StackItemTrait for Struct {
 		todo!()
 	}
 
-	fn convert_to(&self, ty: StackItemType) -> StackItem {
+	fn convert_to(&self, ty: StackItemType) -> Box<dyn StackItem> {
 		todo!()
-	}
-
-	fn get_boolean(&self) -> bool {
-		true
 	}
 
 	fn get_slice(&self) -> &[u8] {
@@ -212,18 +242,40 @@ impl StackItemTrait for Struct {
 	fn get_type(&self) -> StackItemType {
 		StackItemType::Struct
 	}
+	fn get_boolean(&self) -> bool {
+		true
+	}
+	fn deep_copy(&self, asImmutable: bool) -> Box<dyn StackItem> {
+		todo!()
+	}
 
-	fn equals(&self, other: &Option<StackItem>) -> bool {
+	fn deep_copy_with_ref_map(&self, ref_map: &HashMap<&dyn StackItem, &dyn StackItem>, asImmutable: bool) -> Box<dyn StackItem> {
+		todo!()
+	}
+
+	fn equals(&self, other: &Option<dyn StackItem>) -> bool {
+		todo!()
+	}
+
+	fn equals_with_limits(&self, other: &dyn StackItem, limits: &ExecutionEngineLimits) -> bool {
+		todo!()
+	}
+
+	fn get_integer(&self) -> BigInt {
+		todo!()
+	}
+
+	fn get_bytes(&self) -> &[u8] {
 		todo!()
 	}
 }
 
-impl CompoundTypeTrait for Struct {
+impl CompoundType for Struct {
 	fn count(&self) -> usize {
 		self.array.len()
 	}
 
-	fn sub_items(&self) -> Vec<Ref<RefCell<StackItem>>> {
+	fn sub_items(&self) -> Vec<Ref<RefCell<dyn StackItem>>> {
 		self.array.iter().collect()
 	}
 

@@ -1,7 +1,7 @@
 use crate::{
-	stack_item::{ObjectReferenceEntry, StackItem, StackItem::VMByteString, StackItemTrait},
-	stack_item_type::StackItemType,
-	types::compound_types::compound_type::CompoundType,
+    stack_item::{ObjectReferenceEntry, StackItem, StackItem::VMByteString, StackItem},
+    stack_item_type::StackItemType,
+    types::compound_types::compound_type::CompoundType,
 };
 use num_bigint::{BigInt, Sign};
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, os::unix::raw::ino_t, vec::Vec};
@@ -64,7 +64,7 @@ impl Drop for Buffer {
 	}
 }
 
-impl StackItemTrait for Buffer {
+impl StackItem for Buffer {
 	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
 
 	fn dfn(&self) -> isize {

@@ -1,9 +1,9 @@
 use crate::{
 	primitive_types::primitive_type::PrimitiveType,
 	reference_counter::ReferenceCounter,
-	stack_item::{ObjectReferenceEntry, StackItem, StackItemTrait},
+	stack_item::{ObjectReferenceEntry, StackItem,},
 	stack_item_type::StackItemType,
-	types::compound_types::compound_type::{CompoundType, CompoundTypeTrait},
+	types::compound_types::compound_type::{CompoundType},
 };
 use std::{
 	cell::RefCell,
@@ -15,16 +15,19 @@ use std::{
 	hash::Hash,
 	rc::Rc,
 };
+use std::any::Any;
+use num_bigint::BigInt;
+use crate::execution_engine_limits::ExecutionEngineLimits;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default, PartialOrd, Ord)]
 pub struct Map {
 	stack_references: u32,
 	reference_counter: Option<Rc<RefCell<ReferenceCounter>>>,
-	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	object_references: RefCell<Option<HashMap<dyn CompoundType, ObjectReferenceEntry>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
-	dictionary: HashMap<Rc<RefCell<PrimitiveType>>, Rc<RefCell<StackItem>>>,
+	dictionary: HashMap<Rc<RefCell<dyn PrimitiveType>>, Rc<RefCell<dyn StackItem>>>,
 	read_only: bool,
 }
 
@@ -44,7 +47,7 @@ impl Map {
 		}
 	}
 
-	pub fn insert(&mut self, key: Rc<RefCell<PrimitiveType>>, value: Rc<RefCell<StackItem>>) {
+	pub fn insert(&mut self, key: Rc<RefCell<dyn PrimitiveType>>, value: Rc<RefCell<dyn StackItem>>) {
 		if key.size() > Self::MAX_KEY_SIZE {
 			panic!("Max key size exceeded: {}", key.size());
 		}
@@ -52,7 +55,7 @@ impl Map {
 		self.dictionary.insert(key.clone(), value);
 	}
 
-	pub fn get(&self, key: Rc<RefCell<PrimitiveType>>) -> Option<Rc<RefCell<StackItem>>> {
+	pub fn get(&self, key: Rc<RefCell<dyn PrimitiveType>>) -> Option<Rc<RefCell<dyn StackItem>>> {
 		if key.size() > Self::MAX_KEY_SIZE {
 			panic!("Max key size exceeded: {}", key.size());
 		}
@@ -62,7 +65,7 @@ impl Map {
 		}
 	}
 
-	pub fn contains_key(&self, key: Rc<RefCell<PrimitiveType>>) -> bool {
+	pub fn contains_key(&self, key: Rc<RefCell<dyn PrimitiveType>>) -> bool {
 		if key.size() > Self::MAX_KEY_SIZE {
 			panic!("Max key size exceeded: {}", key.size());
 		}
@@ -70,7 +73,7 @@ impl Map {
 		self.dictionary.contains_key(&key)
 	}
 
-	pub fn remove(&mut self, key: Rc<RefCell<PrimitiveType>>) -> Option<Rc<RefCell<StackItem>>> {
+	pub fn remove(&mut self, key: Rc<RefCell<dyn PrimitiveType>>) -> Option<Rc<RefCell<dyn StackItem>>> {
 		if key.size() > Self::MAX_KEY_SIZE {
 			panic!("Max key size exceeded: {}", key.size());
 		}
@@ -91,32 +94,36 @@ impl Map {
 		self.dictionary.clear();
 	}
 
-	pub fn keys(&self) -> Vec<Rc<RefCell<StackItem>>> {
+	pub fn keys(&self) -> Vec<Rc<RefCell<dyn StackItem>>> {
 		self.dictionary.into_keys().collect()
 	}
 
-	pub fn values(&self) -> Vec<Rc<RefCell<StackItem>>> {
+	pub fn values(&self) -> Vec<Rc<RefCell<dyn StackItem>>> {
 		self.dictionary.into_values().collect()
 	}
 
-	pub fn iter(&self) -> Iter<'_, Rc<RefCell<PrimitiveType>>, Rc<RefCell<StackItem>>> {
+	pub fn iter(&self) -> Iter<'_, Rc<RefCell<dyn PrimitiveType>>, Rc<RefCell<dyn StackItem>>> {
 		self.dictionary.iter()
 	}
 
-	pub fn iter_mut(&mut self) -> IterMut<'_, Rc<RefCell<PrimitiveType>>, Rc<RefCell<StackItem>>> {
+	pub fn iter_mut(&mut self) -> IterMut<'_, Rc<RefCell<dyn PrimitiveType>>, Rc<RefCell<dyn StackItem>>> {
 		self.dictionary.iter_mut()
 	}
 
 	pub fn entry(
 		&mut self,
-		key: Rc<RefCell<PrimitiveType>>,
-	) -> Entry<'_, Rc<RefCell<PrimitiveType>>, Rc<RefCell<StackItem>>> {
+		key: Rc<RefCell<dyn PrimitiveType>>,
+	) -> Entry<'_, Rc<RefCell<dyn PrimitiveType>>, Rc<RefCell<dyn StackItem>>> {
 		self.dictionary.entry(key)
 	}
 }
 
-impl StackItemTrait for Map {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
+impl StackItem for Map {
+	const TRUE: Self =  Default::default();
+
+	const FALSE: Self =  Default::default();
+
+	const NULL: Self = Default::default();
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -162,12 +169,8 @@ impl StackItemTrait for Map {
 		todo!()
 	}
 
-	fn convert_to(&self, ty: StackItemType) -> StackItem {
+	fn convert_to(&self, ty: StackItemType) -> Box<dyn StackItem> {
 		todo!()
-	}
-
-	fn get_boolean(&self) -> bool {
-		true
 	}
 
 	fn get_slice(&self) -> &[u8] {
@@ -177,19 +180,44 @@ impl StackItemTrait for Map {
 	fn get_type(&self) -> StackItemType {
 		StackItemType::Map
 	}
+	fn get_boolean(&self) -> bool {
+		true
+	}
+	fn deep_copy(&self, asImmutable: bool) -> Box<dyn StackItem> {
+		todo!()
+	}
 
-	fn equals(&self, other: &Option<StackItem>) -> bool {
+	fn deep_copy_with_ref_map(&self, ref_map: &HashMap<&dyn StackItem, &dyn StackItem>, asImmutable: bool) -> Box<dyn StackItem> {
+		todo!()
+	}
+
+	fn equals(&self, other: &Option<dyn StackItem>) -> bool {
+		todo!()
+	}
+
+	fn equals_with_limits(&self, other: &dyn StackItem, limits: &ExecutionEngineLimits) -> bool {
+		todo!()
+	}
+
+	fn get_integer(&self) -> BigInt {
+		todo!()
+	}
+
+	fn get_interface<T: Any>(&self) -> Option<&T> {
+		todo!()
+	}
+
+	fn get_bytes(&self) -> &[u8] {
 		todo!()
 	}
 }
 
-impl CompoundTypeTrait for Map {
+impl CompoundType for Map {
 	fn count(&self) -> usize {
 		self.dictionary.len()
 	}
 
-	fn sub_items(&self) -> Vec<Rc<RefCell<StackItem>>> {
-		let mut v = Vec::new();
+	fn sub_items(&self) -> Vec<Rc<RefCell<dyn StackItem>>> {
 		self.dictionary.keys().chain(self.dictionary.values()).cloned().collect()
 	}
 
@@ -222,36 +250,15 @@ impl CompoundTypeTrait for Map {
 	}
 }
 
-impl Into<StackItem> for Map {
-	fn into(self) -> StackItem {
-		StackItem::VMMap(self)
+impl PartialEq for Map {
+	fn eq(&self, other: &Self) -> bool {
+		self.dictionary == other.dictionary
 	}
 }
-
-impl From<Map> for StackItem {
-	fn from(map: Map) -> Self {
-		StackItem::VMMap(map)
-	}
-}
-
-impl From<Map> for CompoundType {
-	fn from(map: Map) -> Self {
-		Self::VMMap(map)
-	}
-}
-
-impl Into<CompoundType> for Map {
-	fn into(self) -> CompoundType {
-		CompoundType::VMMap(self)
-	}
-}
-
 impl Clone for Map {
 	fn clone(&self) -> Self {
 		let mut result = Self::new(self.reference_counter.clone());
-
-		self.ref_map.insert(self, result.clone());
-
+		// ref_map.insert(self, result.clone());
 		for (key, value) in self.dictionary.iter() {
 			result.dictionary.insert(key.clone(), value.clone());
 		}

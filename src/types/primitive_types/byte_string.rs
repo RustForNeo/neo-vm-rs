@@ -1,46 +1,52 @@
 use std::{cell::RefCell, collections::HashMap, convert::TryInto, hash::Hash, io::Cursor};
+use std::any::Any;
+use std::hash::Hasher;
+use std::rc::Rc;
 
 use crate::{
-	stack_item::{ObjectReferenceEntry, StackItem, StackItemTrait},
-	stack_item_type::StackItemType,
-	types::{
+    stack_item::{ObjectReferenceEntry, StackItem},
+    stack_item_type::StackItemType,
+    types::{
 		compound_types::compound_type::CompoundType,
-		primitive_types::primitive_type::{PrimitiveType, PrimitiveTypeTrait},
+		primitive_types::primitive_type::{PrimitiveType},
 	},
 };
 use murmur3::murmur3_32;
+use num_bigint::BigInt;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use crate::execution_engine_limits::ExecutionEngineLimits;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ByteString {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	object_references: Rc<RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
 	bytes: Vec<u8>,
-	hash: Option<u32>,
+	hash: u32,
 }
 
 impl ByteString {
 	pub const EMPTY: Self = Self {
 		stack_references: 0,
-		object_references: RefCell::new(None),
+		object_references: Rc::new(RefCell::new(None)),
 		dfn: 0,
 		low_link: 0,
 		on_stack: false,
 		bytes: Vec::new(),
-		hash: None,
+		hash: 0,
 	};
 
 	pub fn new(bytes: Vec<u8>) -> Self {
 		Self {
 			stack_references: 0,
-			object_references: RefCell::new(None),
+			object_references: Rc::new(RefCell::new(None)),
 			dfn: 0,
 			low_link: 0,
 			on_stack: false,
 			bytes,
-			hash: None,
+			hash: 0,
 		}
 	}
 
@@ -54,8 +60,36 @@ impl ByteString {
 	}
 }
 
-impl StackItemTrait for ByteString {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
+
+impl PrimitiveType for ByteString{
+	fn memory(&self) -> &[u8] {
+		self.get_slice()
+	}
+}
+
+impl PartialEq<dyn StackItem> for ByteString {
+	fn eq(&self, other: &Self) -> bool {
+		self.equals(other)
+	}
+}
+
+impl Serialize for ByteString {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+		serializer.serialize_bytes(self.bytes.as_slice())
+	}
+}
+
+impl Deserialize for ByteString {
+	fn deserialize<'de, D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+		let bytes = Vec::<u8>::deserialize(deserializer)?;
+		Ok(ByteString::new(bytes))
+	}
+}
+
+impl StackItem for ByteString {
+	const TRUE: Self = ByteString::new(vec![1]);
+	const FALSE: Self = ByteString::new(vec![0]);
+	const NULL: Self = ByteString::EMPTY;
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -101,82 +135,64 @@ impl StackItemTrait for ByteString {
 		todo!()
 	}
 
-	fn convert_to(&self, ty: StackItemType) -> StackItem {
+	fn convert_to(&self, ty: StackItemType) -> Box<dyn StackItem> {
 		todo!()
 	}
 
-	fn get_boolean(&self) -> bool {
-		if self.bytes.len() > 32 {
-			panic!("Value overflow")
-		}
-		// check whether self.bytes only contains the value 0x00
-		!(self.bytes.iter().all(|b| *b == 0x00) || self.bytes.is_empty())
-	}
 
 	fn get_slice(&self) -> &[u8] {
 		self.bytes.as_slice()
+	}
+
+	fn get_hash_code(&mut self) -> u64 {
+		if self.hash == 0 {
+			let mut hasher = std::collections::hash_map::DefaultHasher::new();
+			hasher.write(&self.bytes);
+			self.hash = hasher.finish() as u32;
+		}
+		self.hash as u64
 	}
 
 	fn get_type(&self) -> StackItemType {
 		StackItemType::ByteString
 	}
 
-	fn equals(&self, other: &Option<StackItem>) -> bool {
+	fn get_boolean(&self) -> bool {
+		self.bytes.iter().all(|&x| x == 0x00)
+	}
+
+	fn deep_copy(&self, asImmutable: bool) -> Box<dyn StackItem> {
 		todo!()
 	}
-}
 
-impl PrimitiveTypeTrait for ByteString {
-	fn memory(&self) -> &[u8] {
-		self.get_slice()
+	fn deep_copy_with_ref_map(&self, ref_map: &HashMap<&dyn StackItem, &dyn StackItem>, asImmutable: bool) -> Box<dyn StackItem> {
+		todo!()
 	}
-}
-impl TryInto<Vec<u8>> for ByteString {
-	type Error = <Vec<u8> as TryInto<Vec<u8>>>::Error;
 
-	fn try_into(self) -> Result<Vec<u8>, Self::Error> {
-		Ok(self.bytes)
+	fn equals(&self, other: &Option<dyn StackItem>) -> bool {
+		todo!()
 	}
-}
 
-impl From<Vec<u8>> for ByteString {
-	fn from(bytes: Vec<u8>) -> Self {
-		Self::new(bytes)
-	}
-}
-
-impl From<&str> for ByteString {
-	fn from(text: &str) -> Self {
-		text.as_bytes().to_vec().into()
-	}
-}
-
-impl Into<StackItem> for ByteString {
-	fn into(self) -> StackItem {
-		StackItem::VMByteString(self)
-	}
-}
-
-impl Into<PrimitiveType> for ByteString {
-	fn into(self) -> PrimitiveType {
-		PrimitiveType::VMByteString(self)
-	}
-}
-
-impl From<PrimitiveType> for ByteString {
-	fn from(ty: PrimitiveType) -> Self {
-		match ty {
-			PrimitiveType::VMByteString(b) => b,
-			_ => panic!(),
+	fn equals_with_limits(&self, other: &dyn StackItem, limits: &ExecutionEngineLimits) -> bool {
+		if self.bytes.len() > limits.max_comparable_size || other.get_slice().len() > limits.max_comparable_size {
+			panic!("Max comparable size exceeded")
+		} else {
+			self.equals(other)
 		}
 	}
-}
 
-impl PartialEq<StackItem> for ByteString {
-	fn eq(&self, other: &StackItem) -> bool {
-		if other.get_type() != StackItemType::ByteString {
-			return false
-		}
-		self.equals(other.try_into().unwrap())
+	fn from_interface(value: &dyn Any) -> Box<dyn StackItem> {
+		todo!()
+	}
+
+	fn get_integer(&self) -> BigInt {
+		todo!()
+	}
+
+	fn get_interface<T: Any>(&self) -> Option<&T> {
+		todo!()
+	}
+	fn get_bytes(&self) -> &[u8] {
+		&self.bytes
 	}
 }

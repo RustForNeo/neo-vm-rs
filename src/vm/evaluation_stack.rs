@@ -4,7 +4,7 @@ use std::{cell::RefCell, collections::VecDeque, convert::TryInto, rc::Rc};
 /// Represents the evaluation stack in the VM.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct EvaluationStack {
-	stack: VecDeque<Rc<RefCell<StackItem>>>,
+	stack: VecDeque<Rc<RefCell<dyn StackItem>>>,
 	reference_counter: Rc<RefCell<ReferenceCounter>>,
 }
 
@@ -31,13 +31,13 @@ impl EvaluationStack {
 	}
 
 	/// Returns the item at the specified index from the top of the stack without removing it.
-	pub fn peek(&self, index: i64) -> Option<Rc<RefCell<StackItem>>> {
+	pub fn peek(&self, index: i64) -> Option<Rc<RefCell<dyn StackItem>>> {
 		let index = index.try_into().ok()?;
 		Some(self.stack.get(self.len().checked_sub(index + 1)?).unwrap().clone())
 	}
 
 	/// Pushes an item onto the top of the stack.
-	pub fn push(&mut self, item: Rc<RefCell<StackItem>>) {
+	pub fn push(&mut self, item: Rc<RefCell<dyn StackItem>>) {
 		self.stack.push_back(item);
 	}
 
@@ -52,16 +52,16 @@ impl EvaluationStack {
 	}
 
 	/// Removes and returns the item at the top of the stack.
-	pub fn pop(&mut self) -> Option<Rc<RefCell<StackItem>>> {
+	pub fn pop(&mut self) -> Option<Rc<RefCell<dyn StackItem>>> {
 		self.stack.pop_back()
 	}
 
 	/// Removes and returns the item at the top of the stack and convert it to the specified type.
-	pub fn pop_as<T: TryInto<StackItem> + Copy>(&mut self) -> Option<T> {
+	pub fn pop_as<T: TryInto<dyn StackItem> + Copy>(&mut self) -> Option<T> {
 		self.stack.pop_back().map(|x| x.try_into().ok())
 	}
 
-	pub fn remove<T: TryInto<StackItem> + Copy>(&mut self, index: i64) -> Option<T> {
+	pub fn remove<T: TryInto<dyn StackItem> + Copy>(&mut self, index: i64) -> Option<T> {
 		let index = index.try_into().ok()?;
 		let index = self.len().checked_sub(index + 1)?;
 		self.stack

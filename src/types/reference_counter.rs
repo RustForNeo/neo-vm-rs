@@ -1,5 +1,5 @@
 use crate::{
-	stack_item::{StackItem, StackItemTrait},
+	stack_item::{StackItem},
 };
 use std::{
 	cell::RefCell,
@@ -9,12 +9,12 @@ use std::{
 	marker::PhantomData,
 	rc::Rc,
 };
-use crate::compound_types::compound_type::CompoundTypeTrait;
+use crate::compound_types::compound_type::CompoundType;
 
 #[derive(Debug)]
 pub struct ReferenceEntry<T>
 where
-	T: CompoundTypeTrait,
+	T: CompoundType,
 {
 	item: T,
 	references: usize,
@@ -22,11 +22,11 @@ where
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ReferenceCounter {
-	tracked_items: HashSet<Rc<RefCell<StackItem>>>,
-	zero_referred: HashSet<Rc<RefCell<StackItem>>>,
-	cached_components: Option<LinkedList<HashSet<Rc<RefCell<StackItem>>>>>,
+	tracked_items: HashSet<Rc<RefCell<dyn StackItem>>>,
+	zero_referred: HashSet<Rc<RefCell<dyn StackItem>>>,
+	cached_components: Option<LinkedList<HashSet<Rc<RefCell<dyn StackItem>>>>>,
 	references_count: usize,
-	phantom: PhantomData<Rc<RefCell<StackItem>>>,
+	phantom: PhantomData<Rc<RefCell<dyn StackItem>>>,
 }
 
 impl ReferenceCounter {
@@ -42,7 +42,7 @@ impl ReferenceCounter {
 
 	fn need_track(&self, item: Rc<RefCell<StackItem>>) -> bool {
 		// Track compound types and buffers
-		if let StackItemTrait::CompoundType(_) | StackItemTrait::Buffer(_) = item {
+		if let StackItem::CompoundType(_) | StackItem::Buffer(_) = item {
 			true
 		} else {
 			false
@@ -51,8 +51,8 @@ impl ReferenceCounter {
 
 	fn add_reference(
 		&mut self,
-		item: Rc<RefCell<StackItem>>,
-		parent: &dyn CompoundTypeTrait<ObjectReferences = ()>,
+		item: Rc<RefCell<dyn StackItem>>,
+		parent: &dyn CompoundType,
 	) {
 		self.references_count += 1;
 		if !self.need_track(item) {
@@ -74,7 +74,7 @@ impl ReferenceCounter {
 
 	pub(crate) fn add_stack_reference(
 		&mut self,
-		mut item: Rc<RefCell<StackItem>>,
+		mut item: Rc<RefCell<dyn StackItem>>,
 		count: usize, /* = 1*/
 	) {
 		self.references_count += count;
@@ -93,7 +93,7 @@ impl ReferenceCounter {
 		self.zero_referred.remove(&item);
 	}
 
-	fn add_zero_referred(&mut self, item: Rc<RefCell<StackItem>>) {
+	fn add_zero_referred(&mut self, item: Rc<RefCell<dyn StackItem>>) {
 		self.zero_referred.insert(item.clone());
 
 		if !self.need_track(item) {
@@ -146,7 +146,7 @@ impl ReferenceCounter {
 					for item in &component {
 						self.tracked_items.remove(item);
 
-						if let StackItemTrait::CompoundType(compound) = item {
+						if let StackItem::CompoundType(compound) = item {
 							self.references_count -= compound.sub_items.len();
 
 							for subitem in &compound.sub_items {
@@ -177,8 +177,8 @@ impl ReferenceCounter {
 
 	fn remove_reference(
 		&mut self,
-		item: Rc<RefCell<StackItem>>,
-		parent: &dyn CompoundTypeTrait<ObjectReferences = ()>,
+		item: Rc<RefCell<dyn StackItem>>,
+		parent: &dyn CompoundType,
 	) {
 		self.references_count -= 1;
 
@@ -199,7 +199,7 @@ impl ReferenceCounter {
 		}
 	}
 
-	pub(crate) fn remove_stack_reference(&mut self, mut item: Rc<RefCell<StackItem>>) {
+	pub(crate) fn remove_stack_reference(&mut self, mut item: Rc<RefCell<dyn StackItem>>) {
 		self.references_count -= 1;
 
 		if !self.need_track(item.clone()) {

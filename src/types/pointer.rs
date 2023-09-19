@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, hash::Hash};
 
 use crate::{
-	stack_item::{ObjectReferenceEntry, StackItem, StackItemTrait},
+	stack_item::{ObjectReferenceEntry, StackItem, StackItem},
 	stack_item_type::StackItemType,
 	vm::script::Script,
 };
@@ -32,7 +32,7 @@ impl Pointer {
 	}
 }
 
-impl StackItemTrait for Pointer {
+impl StackItem for Pointer {
 	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
 
 	fn dfn(&self) -> isize {

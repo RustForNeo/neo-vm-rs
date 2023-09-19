@@ -6,20 +6,24 @@ use std::{
 	hash::{Hash, Hasher},
 };
 use crate::compound_types::compound_type::CompoundType;
-use crate::stack_item::{ObjectReferenceEntry, StackItem, StackItemTrait};
+use crate::stack_item::{ObjectReferenceEntry, StackItem, StackItem};
 use crate::stack_item_type::StackItemType;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default, Copy)]
 pub struct InteropInterface {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry<T>>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
 	object: Box<dyn Any>,
 }
 
-impl StackItemTrait for InteropInterface {
+impl InteropInterface{
+
+}
+
+impl StackItem for InteropInterface {
 	type ObjectReferences = ();
 
 	fn dfn(&self) -> isize {

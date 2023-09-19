@@ -1,20 +1,24 @@
 use crate::{
-	stack_item::{ObjectReferenceEntry, StackItem, StackItemTrait},
+	stack_item::{ObjectReferenceEntry, StackItem},
 	stack_item_type::StackItemType,
 };
 use std::{cell::RefCell, collections::HashMap, hash::Hash, num::TryFromIntError};
+use std::any::Any;
+use std::rc::Rc;
 
 use crate::types::{
 	compound_types::compound_type::CompoundType,
-	primitive_types::primitive_type::{PrimitiveType, PrimitiveTypeTrait},
+	primitive_types::primitive_type::{PrimitiveType},
 };
 use num_bigint::BigInt;
 use num_traits::{One, Zero};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use crate::execution_engine_limits::ExecutionEngineLimits;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Boolean {
 	stack_references: u32,
-	object_references: RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>,
+	object_references: Rc<RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>>,
 	dfn: isize,
 	low_link: usize,
 	on_stack: bool,
@@ -22,13 +26,10 @@ pub struct Boolean {
 }
 
 impl Boolean {
-	const TRUE: Vec<u8> = vec![1];
-	const FALSE: Vec<u8> = vec![0];
-
 	pub fn new(value: bool) -> Self {
 		Self {
 			stack_references: 0,
-			object_references: RefCell::new(None),
+			object_references: Rc::new(RefCell::new(None)),
 			dfn: 0,
 			low_link: 0,
 			on_stack: false,
@@ -36,33 +37,38 @@ impl Boolean {
 		}
 	}
 
-	fn memory(&self) -> Vec<u8> {
+}
+
+impl Serialize for Boolean {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+		serializer.serialize_bool(self.value)
+	}
+}
+
+impl Deserialize for Boolean {
+	fn deserialize<'de, D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+		let value = bool::deserialize(deserializer)?;
+		Ok(Boolean::new(value))
+	}
+}
+
+
+impl PrimitiveType for Boolean{
+	fn memory(&self) -> &[u8] {
 		if self.value {
-			Self::TRUE.clone()
+			Self::TRUE.clone().as_slice()
 		} else {
-			Self::FALSE.clone()
-		}
-	}
-
-	fn get_boolean(&self) -> bool {
-		self.value
-	}
-
-	fn equals(&self, other: &Boolean) -> bool {
-		self.value == other.value
-	}
-
-	fn get_integer(&self) -> BigInt {
-		if self.value {
-			BigInt::one()
-		} else {
-			BigInt::zero()
+			Self::FALSE.clone().as_slice()
 		}
 	}
 }
 
-impl StackItemTrait for Boolean {
-	type ObjectReferences = RefCell<Option<HashMap<CompoundType, ObjectReferenceEntry>>>;
+impl StackItem for Boolean {
+	const TRUE: Self = Boolean::new(true);
+
+	const FALSE: Self = Boolean::new(false);
+
+	const NULL: Self = Default::default();
 
 	fn dfn(&self) -> isize {
 		self.dfn
@@ -108,14 +114,6 @@ impl StackItemTrait for Boolean {
 		panic!("Boolean cleanup")
 	}
 
-	fn get_boolean(&self) -> bool {
-		self.value
-	}
-
-	fn get_integer(&self) -> Result<BigInt, TryFromIntError> {
-		return Ok(if self.value { BigInt::one() } else { BigInt::zero() })
-	}
-
 	fn get_slice(&self) -> &[u8] {
 		todo!()
 	}
@@ -124,61 +122,37 @@ impl StackItemTrait for Boolean {
 		StackItemType::Boolean
 	}
 
-	fn equals(&self, other: &Option<StackItem>) -> bool {
+	fn get_boolean(&self) -> bool {
+		self.value
+	}
+	fn deep_copy(&self, asImmutable: bool) -> Box<dyn StackItem> {
 		todo!()
 	}
-}
-
-impl PrimitiveTypeTrait for Boolean {
-	fn memory(&self) -> &[u8] {
+	fn deep_copy_with_ref_map(&self, ref_map: &HashMap<&dyn StackItem, &dyn StackItem>, asImmutable: bool) -> Box<dyn StackItem> {
 		todo!()
 	}
-}
 
-impl Into<StackItem> for Boolean {
-	fn into(self) -> StackItem {
-		StackItem::VMBoolean(self)
+	fn equals(&self, other: &Option<dyn StackItem>) -> bool {
+		todo!()
 	}
-}
 
-impl Into<PrimitiveType> for Boolean {
-	fn into(self) -> PrimitiveType {
-		PrimitiveType::VMBoolean(self)
+	fn equals_with_limits(&self, other: &dyn StackItem, limits: &ExecutionEngineLimits) -> bool {
+		todo!()
 	}
-}
 
-impl From<PrimitiveType> for Boolean {
-	fn from(ty: PrimitiveType) -> Self {
-		match ty {
-			PrimitiveType::VMBoolean(b) => b,
-			_ => panic!("Invalid cast"),
-		}
+	fn from_interface(value: &dyn Any) -> Box<dyn StackItem> {
+		todo!()
 	}
-}
 
-impl From<StackItem> for Boolean {
-	fn from(item: StackItem) -> Self {
-		match item {
-			StackItem::VMBoolean(b) => b,
-			_ => panic!("Invalid cast"),
-		}
+	fn get_integer(&self) -> Result<BigInt, TryFromIntError> {
+		return Ok(if self.value { BigInt::one() } else { BigInt::zero() })
 	}
-}
 
-impl From<bool> for Boolean {
-	fn from(value: bool) -> Self {
-		Self::new(value)
+	fn get_interface<T: Any>(&self) -> Option<&T> {
+		todo!()
 	}
-}
 
-impl Into<StackItem> for bool {
-	fn into(self) -> StackItem {
-		Boolean::new(self).into()
-	}
-}
-
-impl Into<PrimitiveType> for bool {
-	fn into(self) -> PrimitiveType {
-		Boolean::new(self).into()
+	fn get_bytes(&self) -> &[u8] {
+		self.get_slice()
 	}
 }
